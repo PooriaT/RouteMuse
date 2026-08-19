@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "routemuse-backend"
 version = "0.1.0"
@@ -15,3 +19,7 @@ line-length = 88
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+exclude = ["migrations*"]
