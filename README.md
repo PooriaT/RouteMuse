@@ -13,36 +13,40 @@ backend/       FastAPI API, domain models, provider protocols, Alembic
 frontend/      Next.js App Router planner shell and typed API client
 docs/          Architecture documentation
 .github/       Backend and frontend CI
-docker-compose.yml
 Makefile
 ```
 
-## Local setup
+## Local setup (without Docker)
 
-Requirements: Docker with Compose (recommended), or Python 3.12 and Node 20.
+Requirements: Python 3.12, Node.js 20, and a locally available PostgreSQL instance with PostGIS. Create the database and credentials represented by `DATABASE_URL` before applying migrations.
 
 ```bash
 cp .env.example .env
-make dev
-# UI: http://localhost:3000
-# API health: http://localhost:8000/health
+python -m venv .venv
+. .venv/bin/activate
+pip install -e 'backend[dev]'
+cd frontend
+npm install
+npm run dev
 ```
 
-Run `make migrate` in another terminal to apply the PostGIS migration. `make down` stops the stack. For host development, install `backend` with `pip install -e 'backend[dev]'`, run `uvicorn app.main:app --reload` from `backend`, then run `npm install && npm run dev` from `frontend`.
+Running `npm run dev` from `frontend` starts both the Next.js development server and the FastAPI development server. The command stops both processes together. The UI is available at `http://localhost:3000`; API health is at `http://localhost:8000/health`.
+
+In a second terminal with the virtual environment active, apply migrations with `make migrate`. The initial migration enables PostGIS. Because RouteMuse does not currently ship container configuration, PostgreSQL/PostGIS must already be running locally.
 
 ## Configuration
 
-Active variables are `DATABASE_URL`, `CORS_ORIGINS`, and `NEXT_PUBLIC_API_BASE_URL`. `.env.example` also documents secret-free placeholders for future Strava, Ollama, and openrouteservice adapters. Ollama is not launched or downloaded by Compose. Never commit `.env`.
+Active variables are `DATABASE_URL`, `CORS_ORIGINS`, and `NEXT_PUBLIC_API_BASE_URL`. `.env.example` also documents secret-free placeholders for future Strava, Ollama, and openrouteservice adapters. Ollama is not launched or downloaded by the application. Never commit `.env`.
 
 ## Commands
 
 | Command | Purpose |
 |---|---|
-| `make dev` | Build and start frontend, backend, and PostGIS |
+| `make dev` | Start the frontend and backend development servers through the frontend configuration |
 | `make test` | Run backend and frontend unit tests |
 | `make lint` | Run Ruff and ESLint |
-| `make migrate` | Apply Alembic migrations inside Compose |
-| `make down` | Stop local services |
+| `make migrate` | Apply Alembic migrations to the configured local database |
+| `cd frontend && npm run dev` | Start both Next.js and FastAPI directly from the frontend directory |
 
 ## Current limitations and next integrations
 
