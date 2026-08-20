@@ -1,11 +1,122 @@
+"use client";
+
+import { useEffect, useId, useState } from "react";
+
 import type { ActivityType } from "@/types/activity";
-import { defaultHistoricalDateRange } from "./dateRange";
-export function PlannerForm({ activityTypes }: { activityTypes: ActivityType[] }) {
-  const dates = defaultHistoricalDateRange();
-  return <main className="mx-auto max-w-5xl p-6 md:p-10">
-    <header className="mb-8"><p className="font-semibold text-emerald-700">RouteMuse</p><h1 className="text-4xl font-bold">Plan your next outdoor route</h1><p className="mt-3 max-w-2xl text-slate-600">A foundation for recommendations grounded in your history and factual route-provider data.</p></header>
-    <section className="mb-6 rounded-xl bg-white p-6 shadow-sm"><h2 className="mb-4 text-xl font-bold">Historical activity period</h2><div className="grid gap-4 md:grid-cols-2"><label>Start date<input type="date" defaultValue={dates.startDate}/></label><label>End date<input type="date" defaultValue={dates.endDate}/></label></div><button disabled className="mt-5 cursor-not-allowed rounded-lg bg-slate-300 px-5 py-3 text-slate-600">Connect with Strava — not implemented</button></section>
-    <section className="mb-6 rounded-xl bg-white p-6 shadow-sm"><h2 className="mb-4 text-xl font-bold">Planning preferences</h2><fieldset disabled className="grid gap-4 opacity-70 md:grid-cols-2"><label>Location<input placeholder="Area or location"/></label><label>Activity type<select defaultValue=""><option value="">Select after connecting</option>{activityTypes.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label><label>Target distance (km), optional<input type="number"/></label><label>Target duration (minutes), optional<input type="number"/></label><label>Desired challenge, optional<select><option>Any</option><option>Easy</option><option>Moderate</option><option>Hard</option></select></label><label>Route shape, optional<select><option>Any</option><option>Loop</option><option>Out-and-back</option><option>Point-to-point</option></select></label></fieldset><p className="mt-4 text-sm text-slate-500">Planning controls will activate after activity import is implemented.</p></section>
-    <section className="rounded-xl border-2 border-dashed border-emerald-200 p-8 text-center"><h2 className="text-xl font-bold">Recommendations</h2><p className="mt-2 text-slate-600">Provider-backed, personalized route candidates will appear here in a future release.</p></section>
-  </main>;
+
+import { defaultHistoricalDateRange, type HistoricalDateRange } from "./dateRange";
+
+type PlannerFormProps = {
+  activityTypes: ActivityType[];
+  activityTypesUnavailable?: boolean;
+  initialDateRange?: HistoricalDateRange;
+};
+
+export function PlannerForm({
+  activityTypes,
+  activityTypesUnavailable = false,
+  initialDateRange,
+}: PlannerFormProps) {
+  const [dates, setDates] = useState(() =>
+    initialDateRange
+      ? initialDateRange
+      : { startDate: "", endDate: "" },
+  );
+  const validationMessageId = useId();
+  const hasInvalidRange = Boolean(
+    dates.startDate && dates.endDate && dates.startDate > dates.endDate,
+  );
+
+  useEffect(() => {
+    if (!initialDateRange) {
+      setDates(defaultHistoricalDateRange());
+    }
+  }, [initialDateRange]);
+
+  return (
+    <main className="mx-auto max-w-5xl p-6 md:p-10">
+      <header className="mb-8">
+        <p className="font-semibold text-emerald-700">RouteMuse</p>
+        <h1 className="text-4xl font-bold">Plan your next outdoor route</h1>
+        <p className="mt-3 max-w-2xl text-slate-600">
+          Start with your activity history, then add preferences to receive future
+          provider-backed route recommendations.
+        </p>
+        <ol aria-label="Planner workflow" className="mt-5 grid gap-2 text-sm text-slate-600 sm:grid-cols-4">
+          <li><strong>1.</strong> Historical range</li>
+          <li><strong>2.</strong> Strava import</li>
+          <li><strong>3.</strong> Preferences</li>
+          <li><strong>4.</strong> Recommendations</li>
+        </ol>
+      </header>
+
+      <section aria-labelledby="history-heading" className="mb-6 rounded-xl bg-white p-6 shadow-sm">
+        <h2 id="history-heading" className="mb-4 text-xl font-bold">Historical activity period</h2>
+        <div className="grid gap-4 md:grid-cols-2">
+          <label>
+            Start date
+            <input
+              aria-describedby={hasInvalidRange ? validationMessageId : undefined}
+              aria-invalid={hasInvalidRange}
+              type="date"
+              value={dates.startDate}
+              onChange={(event) => setDates((current) => ({ ...current, startDate: event.target.value }))}
+            />
+          </label>
+          <label>
+            End date
+            <input
+              aria-describedby={hasInvalidRange ? validationMessageId : undefined}
+              aria-invalid={hasInvalidRange}
+              type="date"
+              value={dates.endDate}
+              onChange={(event) => setDates((current) => ({ ...current, endDate: event.target.value }))}
+            />
+          </label>
+        </div>
+        {hasInvalidRange && (
+          <p id={validationMessageId} role="alert" className="mt-3 text-sm font-medium text-red-700">
+            Start date must be on or before end date.
+          </p>
+        )}
+        <button
+          type="button"
+          disabled
+          aria-describedby="strava-status"
+          className="mt-5 cursor-not-allowed rounded-lg bg-slate-300 px-5 py-3 text-slate-600 disabled:opacity-75"
+        >
+          Connect with Strava
+        </button>
+        <p id="strava-status" className="mt-2 text-sm text-slate-500">Not implemented. No connection or import will occur.</p>
+      </section>
+
+      <section aria-labelledby="preferences-heading" className="mb-6 rounded-xl bg-white p-6 shadow-sm">
+        <h2 id="preferences-heading" className="mb-4 text-xl font-bold">Planning preferences</h2>
+        <fieldset disabled aria-describedby="preferences-status" className="grid gap-4 opacity-60 md:grid-cols-2">
+          <legend className="sr-only">Route planning preferences</legend>
+          <label>Location<input placeholder="Area or location" /></label>
+          <label>
+            Activity type
+            <select defaultValue="">
+              <option value="">Select after connecting</option>
+              {activityTypes.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+            </select>
+          </label>
+          <label>Target distance (km), optional<input type="number" min="0" /></label>
+          <label>Target duration (minutes), optional<input type="number" min="0" /></label>
+          <label>Desired challenge, optional<select defaultValue=""><option value="">Any challenge</option><option value="easy">Easy</option><option value="moderate">Moderate</option><option value="hard">Hard</option></select></label>
+          <label>Route shape, optional<select defaultValue=""><option value="">Any route shape</option><option value="loop">Loop</option><option value="out-and-back">Out-and-back</option><option value="point-to-point">Point-to-point</option></select></label>
+        </fieldset>
+        <p id="preferences-status" className="mt-4 text-sm text-slate-500">Planning controls are unavailable until activity import is implemented.</p>
+        {activityTypesUnavailable && (
+          <p role="status" className="mt-2 text-sm text-amber-700">Activity types are temporarily unavailable. Try again when the RouteMuse API is running.</p>
+        )}
+      </section>
+
+      <section aria-labelledby="recommendations-heading" className="rounded-xl border-2 border-dashed border-emerald-200 p-8 text-center">
+        <h2 id="recommendations-heading" className="text-xl font-bold">Recommendations</h2>
+        <p className="mt-2 text-slate-600">No recommendations yet. Provider-backed, personalized route candidates will appear here in a future release.</p>
+      </section>
+    </main>
+  );
 }
