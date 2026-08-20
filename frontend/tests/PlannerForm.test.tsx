@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { renderToString } from "react-dom/server";
+import { describe, expect, it, vi } from "vitest";
 
 import { PlannerForm } from "@/features/planner/PlannerForm";
 
@@ -9,10 +10,35 @@ const types = [
 ];
 
 function renderPlanner() {
-  return render(<PlannerForm activityTypes={types} today={new Date(2026, 7, 19, 23)} />);
+  return render(
+    <PlannerForm
+      activityTypes={types}
+      initialDateRange={{ startDate: "2025-08-19", endDate: "2026-08-19" }}
+    />,
+  );
 }
 
 describe("PlannerForm", () => {
+  it("does not render timezone-dependent default dates on the server", () => {
+    const markup = renderToString(<PlannerForm activityTypes={types} />);
+
+    expect(markup).toContain('type="date" value=""');
+    expect(markup).not.toContain(defaultDateForServerTimezone());
+  });
+
+  it("initializes default dates from the browser calendar after mounting", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 7, 19, 23));
+
+    try {
+      render(<PlannerForm activityTypes={types} />);
+      expect(screen.getByLabelText("Start date")).toHaveValue("2025-08-19");
+      expect(screen.getByLabelText("End date")).toHaveValue("2026-08-19");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("renders the historical period with deterministic local defaults", () => {
     renderPlanner();
     expect(screen.getByRole("heading", { name: "Historical activity period" })).toBeInTheDocument();
@@ -52,7 +78,20 @@ describe("PlannerForm", () => {
   });
 
   it("shows a user-safe activity-type fallback", () => {
-    render(<PlannerForm activityTypes={[]} activityTypesUnavailable today={new Date(2026, 7, 19)} />);
+    render(
+      <PlannerForm
+        activityTypes={[]}
+        activityTypesUnavailable
+        initialDateRange={{ startDate: "2025-08-19", endDate: "2026-08-19" }}
+      />,
+    );
     expect(screen.getByRole("status")).toHaveTextContent("Activity types are temporarily unavailable");
   });
 });
+
+function defaultDateForServerTimezone() {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${now.getFullYear()}-${month}-${day}`;
+}

@@ -1,25 +1,37 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 
 import type { ActivityType } from "@/types/activity";
 
-import { defaultHistoricalDateRange } from "./dateRange";
+import { defaultHistoricalDateRange, type HistoricalDateRange } from "./dateRange";
 
 type PlannerFormProps = {
   activityTypes: ActivityType[];
   activityTypesUnavailable?: boolean;
-  today?: Date;
+  initialDateRange?: HistoricalDateRange;
 };
 
 export function PlannerForm({
   activityTypes,
   activityTypesUnavailable = false,
-  today,
+  initialDateRange,
 }: PlannerFormProps) {
-  const [dates, setDates] = useState(() => defaultHistoricalDateRange(today));
+  const [dates, setDates] = useState(() =>
+    initialDateRange
+      ? initialDateRange
+      : { startDate: "", endDate: "" },
+  );
   const validationMessageId = useId();
-  const hasInvalidRange = dates.startDate > dates.endDate;
+  const hasInvalidRange = Boolean(
+    dates.startDate && dates.endDate && dates.startDate > dates.endDate,
+  );
+
+  useEffect(() => {
+    if (!initialDateRange) {
+      setDates(defaultHistoricalDateRange());
+    }
+  }, [initialDateRange]);
 
   return (
     <main className="mx-auto max-w-5xl p-6 md:p-10">
