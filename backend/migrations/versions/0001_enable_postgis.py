@@ -13,4 +13,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.execute("DROP EXTENSION IF EXISTS postgis")
+    # Keep the extension installed: later geospatial objects may depend on it, and
+    # dropping it (especially with CASCADE) risks destructive data loss.
+    pass

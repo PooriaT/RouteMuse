@@ -18,7 +18,7 @@ Makefile
 
 ## Local setup (without Docker)
 
-Requirements: Python 3.12, Node.js 20, and a locally available PostgreSQL instance with PostGIS. Create the database and credentials represented by `DATABASE_URL` before applying migrations.
+Requirements: Python 3.12, Node.js 20, and a locally available PostgreSQL instance with PostGIS. Install PostgreSQL and the PostGIS package using the method appropriate for your operating system or database provider. The server must have the PostGIS extension binaries available; Alembic enables the extension in the RouteMuse database but cannot install those server-side files.
 
 ```bash
 cp .env.example .env
@@ -32,11 +32,18 @@ npm run dev
 
 Running `npm run dev` from `frontend` starts both the Next.js development server and the FastAPI development server. The command stops both processes together. The UI is available at `http://localhost:3000`; API health is at `http://localhost:8000/health`.
 
-In a second terminal with the virtual environment active, apply migrations with `make migrate`. The initial migration enables PostGIS. Because RouteMuse does not currently ship container configuration, PostgreSQL/PostGIS must already be running locally.
+Create a database and role using your PostgreSQL administration tools, then set `DATABASE_URL` in `.env` to its SQLAlchemy psycopg URL. The secret-free value in `.env.example` illustrates the expected format; choose local credentials rather than reusing its example password. In a second terminal with the virtual environment active, apply and inspect migrations:
+
+```bash
+make migrate
+cd backend && alembic current
+```
+
+The initial migration runs `CREATE EXTENSION IF NOT EXISTS postgis`, so it is safe to reapply when PostGIS is already enabled. PostgreSQL may require the configured role to have permission to create extensions. Its downgrade intentionally leaves PostGIS installed: removing an extension can invalidate or destroy geospatial objects introduced later. Because RouteMuse does not ship container configuration, PostgreSQL/PostGIS must already be running locally.
 
 ## Configuration
 
-Active variables are `DATABASE_URL`, `CORS_ORIGINS`, and `NEXT_PUBLIC_API_BASE_URL`. `.env.example` also documents secret-free placeholders for future Strava, Ollama, and openrouteservice adapters. Ollama is not launched or downloaded by the application. Never commit `.env`.
+Active variables are `DATABASE_URL`, `CORS_ORIGINS`, and `NEXT_PUBLIC_API_BASE_URL`. `DATABASE_URL` is the sole database connection setting and is used by both the application and Alembic. `.env.example` also documents secret-free placeholders for future Strava, Ollama, and openrouteservice adapters. Ollama is not launched or downloaded by the application. Never commit `.env`.
 
 ## Commands
 
