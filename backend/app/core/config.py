@@ -1,24 +1,32 @@
 from functools import lru_cache
+from pathlib import Path
+from typing import Annotated
 
-from pydantic import Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field, field_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
+
+ENV_FILE = Path(__file__).resolve().parents[3] / ".env"
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=("../.env", ".env"), extra="ignore")
+    model_config = SettingsConfigDict(env_file=ENV_FILE, extra="ignore")
 
     app_name: str = "RouteMuse API"
     environment: str = "development"
     database_url: str = Field(
         default="postgresql+psycopg://routemuse:routemuse@localhost:5432/routemuse"
     )
-    cors_origins: str = "http://localhost:3000"
+    cors_origins: Annotated[list[str], NoDecode] = Field(
+        default_factory=lambda: ["http://localhost:3000"]
+    )
 
-    @property
-    def allowed_origins(self) -> list[str]:
-        return [
-            value.strip() for value in self.cors_origins.split(",") if value.strip()
-        ]
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def parse_cors_origins(cls, value: object) -> object:
+        """Accept a comma-separated environment value or an explicit list."""
+        if isinstance(value, str):
+            return [origin.strip() for origin in value.split(",") if origin.strip()]
+        return value
 
 
 @lru_cache

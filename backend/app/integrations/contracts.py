@@ -1,12 +1,14 @@
 from datetime import date
-from typing import Any, Protocol
+from typing import Protocol
 
+from app.domain.activities import Activity
 from app.domain.athlete_profile import AthleteProfile
+from app.domain.recommendations import RecommendationExplanation
 from app.domain.routes import RouteCandidate
 
 
 class ActivityProvider(Protocol):
-    async def activities(self, start: date, end: date) -> list[dict[str, Any]]: ...
+    async def activities(self, start: date, end: date) -> list[Activity]: ...
 
 
 class GeocodingProvider(Protocol):
@@ -26,4 +28,4 @@ class RoutingProvider(Protocol):
 class LlmProvider(Protocol):
     async def explain(
         self, candidate: RouteCandidate, athlete: AthleteProfile
-    ) -> dict[str, Any]: ...
+    ) -> RecommendationExplanation: ...
