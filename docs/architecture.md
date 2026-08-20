@@ -3,19 +3,39 @@
 RouteMuse is a modular monolith with a typed Next.js UI, a FastAPI application, and PostgreSQL/PostGIS. Provider contracts form narrow seams around external systems.
 
 ```mermaid
-flowchart LR
-  S[Strava provider] --> I[Activity import]
-  I --> N[RouteMuse normalized activities]
-  N --> A[Deterministic athlete analysis]
-  L[Location + preferences] --> G[Candidate generator]
-  A --> G
-  P[Geospatial and routing providers] -->|geometry + facts| G
-  G --> C[Deterministic scoring]
-  C --> O[Ollama structured reasoning]
-  O --> U[Ranked map UI]
+flowchart TD
+  S[Strava] --> AP[Activity provider]
+  AP --> N[Normalized activities]
+  N --> A[Athlete profile]
+  A --> RC[Route candidates]
+  L[Location + preferences] --> GP[Geospatial / routing providers]
+  GP -->|grounded route facts| RC
+  RC --> D[Deterministic scoring]
+  D --> O[Ollama explanation]
+  O --> U[Frontend recommendations]
 ```
 
-## Boundaries
+## RouteMuse domain
+
+RouteMuse owns the vocabulary used by the rest of the application: `ActivityKind`, normalized activities, `AthleteProfile`, `RouteCandidate`, and recommendation concepts. These models use canonical meters and seconds and must not mirror a provider payload merely for convenience. Presentation code owns user-facing unit conversion.
+
+## Integration boundaries
+
+**Strava.** Strava is an external activity-data provider, not the owner of RouteMuse's taxonomy. A Strava adapter must translate its DTOs into RouteMuse activities at the integration boundary; provider-specific fields must not leak into domain or application logic.
+
+**Geospatial and routing providers.** External systems own factual trail and route information. Adapters normalize their geometry, coordinates, distance, elevation, surface, access, safety, and attribution facts into RouteMuse `RouteCandidate` models. Their implementations depend on small contracts, such as the protocols in `backend/app/integrations/contracts.py`, so a provider can be replaced without rewriting the domain.
+
+**Ollama.** Ollama may reason over and explain already-grounded, structured candidates. It is downstream of factual providers and deterministic scoring. It is never authoritative for coordinates, route geometry, trail existence, distance, elevation, access restrictions, or safety conditions, and must not invent any of them.
+
+## Application logic
+
+Athlete capability, consistency, representative efforts, and other deterministic metrics belong to RouteMuse application/domain logic and must not depend on an LLM. Candidate feasibility and ranking are also primarily deterministic application logic. This keeps recommendations testable and ensures an explanation cannot alter the underlying route facts or score.
+
+## Persistence
+
+SQLAlchemy models, sessions, and repositories belong in the persistence layer outside the domain model. Domain concepts must remain usable in unit tests without a database and must not inherit from SQLAlchemy types. PostgreSQL/PostGIS stores application and geospatial data; Alembic owns schema evolution.
+
+## Architectural rules
 
 1. Strava is an activity-data provider, not the owner of the application's taxonomy.
 2. RouteMuse owns normalized activity data and maps provider payloads at integration boundaries.
@@ -23,6 +43,7 @@ flowchart LR
 4. Athlete analysis is deterministic application logic.
 5. Candidate feasibility and scoring are deterministic application logic.
 6. Ollama may explain already-grounded candidates through schema-validated output. It must never invent route facts or geometry.
-7. External implementations remain replaceable through the small provider protocols in `backend/app/integrations/contracts.py`.
+7. Persistence concerns remain outside RouteMuse domain models.
+8. External implementations remain replaceable through small provider contracts.
 
-Meters and seconds are canonical internal units. Presentation code is responsible for user-facing conversion. The scaffold deliberately contains no live adapters, analytics, scoring, or LLM calls.
+The scaffold deliberately contains no live adapters, analytics, scoring, or LLM calls.
