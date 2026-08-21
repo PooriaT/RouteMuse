@@ -35,6 +35,8 @@ Athlete capability, consistency, representative efforts, and other deterministic
 
 SQLAlchemy models, sessions, and repositories belong in the persistence layer outside the domain model. Domain concepts must remain usable in unit tests without a database and must not inherit from SQLAlchemy types. PostgreSQL/PostGIS stores application and geospatial data; Alembic owns schema evolution.
 
+Strava persistence stores one connection per provider athlete, imported activity facts in canonical meters and seconds, and durable synchronization-run metadata. Provider activity IDs are unique within a connection so repeated synchronization is idempotent. The original Strava `sport_type` is retained even when no RouteMuse activity kind is supported; the normalized kind is nullable in that case. OAuth tokens are Fernet-encrypted before being bound to database columns, using the environment-provided `STRAVA_TOKEN_ENCRYPTION_KEY`; authorization codes and full provider payloads are not stored.
+
 ## Architectural rules
 
 1. Strava is an activity-data provider, not the owner of the application's taxonomy.

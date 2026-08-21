@@ -22,6 +22,10 @@ def test_alembic_environment_loads_without_database_connection() -> None:
 
     assert result.returncode == 0, result.stderr
     assert "CREATE EXTENSION IF NOT EXISTS postgis" in result.stdout
+    assert "CREATE TABLE strava_connections" in result.stdout
+    assert "CREATE TABLE strava_activities" in result.stdout
+    assert "CREATE TABLE strava_synchronization_runs" in result.stdout
+    assert "uq_strava_activities_connection_activity" in result.stdout
 
 
 def test_revision_chain_and_safe_postgis_downgrade() -> None:
@@ -32,6 +36,15 @@ def test_revision_chain_and_safe_postgis_downgrade() -> None:
     assert revision.downgrade() is None
 
 
+def test_strava_persistence_revision_is_importable_and_chained() -> None:
+    revision = importlib.import_module(
+        "migrations.versions.0002_add_strava_persistence"
+    )
+
+    assert revision.revision == "0002"
+    assert revision.down_revision == "0001"
+
+
 def test_alembic_configuration_defers_database_url_to_application_settings() -> None:
     config = Config(BACKEND_DIRECTORY / "alembic.ini")
 
@@ -40,4 +53,8 @@ def test_alembic_configuration_defers_database_url_to_application_settings() -> 
 
 def test_model_package_uses_the_single_declarative_metadata() -> None:
     assert models is not None
-    assert Base.metadata.tables == {}
+    assert set(Base.metadata.tables) == {
+        "strava_connections",
+        "strava_activities",
+        "strava_synchronization_runs",
+    }
