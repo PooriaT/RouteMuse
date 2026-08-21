@@ -18,23 +18,24 @@ Makefile
 
 ## Local setup
 
-Requirements: Python 3.12, Node.js 20, and a locally available PostgreSQL instance with PostGIS. Install PostgreSQL and the PostGIS package using the method appropriate for your operating system or database provider. The server must have the PostGIS extension binaries available; Alembic enables the extension in the RouteMuse database but cannot install those server-side files.
+Requirements: Python 3.13, Poetry 2.x, Node.js 20, npm, and a locally available PostgreSQL instance with PostGIS. Install PostgreSQL and the PostGIS package using the method appropriate for your operating system or database provider. The server must have the PostGIS extension binaries available; Alembic enables the extension in the RouteMuse database but cannot install those server-side files.
 
 From the repository root, configure both applications and install their dependencies:
 
 ```bash
 cp .env.example .env
-python -m venv .venv
-. .venv/bin/activate
-pip install -e 'backend[dev]'
-npm --prefix frontend install
+cd backend
+poetry env use python3.13
+poetry install
+cd ..
+npm --prefix frontend ci
 ```
 
 Create a database and role using your PostgreSQL administration tools, then set `DATABASE_URL` in `.env` to its SQLAlchemy psycopg URL. The example value illustrates the expected format; choose your own local credentials. After PostgreSQL is running and the PostGIS server package is installed, apply and inspect migrations:
 
 ```bash
 make migrate
-cd backend && alembic current
+cd backend && poetry run alembic current
 ```
 
 The initial migration runs `CREATE EXTENSION IF NOT EXISTS postgis`, so it is safe to reapply when PostGIS is already enabled. PostgreSQL may require the configured role to have permission to create extensions. Its downgrade intentionally leaves PostGIS installed: removing an extension can invalidate or destroy geospatial objects introduced later. PostgreSQL/PostGIS must already be running locally.
@@ -45,13 +46,20 @@ Start the normal development workflow from the repository root:
 make dev
 ```
 
-This starts Next.js and FastAPI together through the frontend's `concurrently` command. If either process exits, the command terminates the other rather than leaving an orphaned server. The UI is available at `http://localhost:3000`; API health is at `http://localhost:8000/health`. Keep the Python virtual environment active so the backend command uses the installed development dependencies.
+This starts Next.js and FastAPI together through the frontend's `concurrently` command. FastAPI runs in the Poetry-managed backend environment, so no virtual-environment activation is needed. If either process exits, the command terminates the other rather than leaving an orphaned server. The UI is available at `http://localhost:3000`; API health is at `http://localhost:8000/health`.
 
 ## Configuration
 
 Active variables are `DATABASE_URL`, `CORS_ORIGINS`, `FRONTEND_URL`, `NEXT_PUBLIC_API_BASE_URL`, `STRAVA_CLIENT_ID`, `STRAVA_CLIENT_SECRET`, `STRAVA_REDIRECT_URI`, and `STRAVA_TOKEN_ENCRYPTION_KEY`. `DATABASE_URL` is the sole database connection setting and is used by both the application and Alembic. `FRONTEND_URL` is the trusted planner URL the backend redirects to after successful Strava authorization. The backend and Alembic read the root `.env`; Next.js reads its process environment and optional `frontend/.env.local`. The default URLs work without extra frontend configuration. To override the API URL, put `NEXT_PUBLIC_API_BASE_URL=...` in `frontend/.env.local` or export it before `make dev`.
 
-To configure Strava, create an API application in Strava's developer settings and register the callback domain for the host used by `STRAVA_REDIRECT_URI`. For local development, the example callback is `http://localhost:8000/api/v1/strava/callback`; the configured redirect URI must use that callback route and a host accepted by the Strava application. Copy the client ID and client secret into the local `.env`, then generate a Fernet key for `STRAVA_TOKEN_ENCRYPTION_KEY`, for example with `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`. Keep that key stable for the lifetime of stored connections. Never commit the client secret, encryption key, or local environment files.
+To configure Strava, create an API application in Strava's developer settings and register the callback domain for the host used by `STRAVA_REDIRECT_URI`. For local development, the example callback is `http://localhost:8000/api/v1/strava/callback`; the configured redirect URI must use that callback route and a host accepted by the Strava application. Copy the client ID and client secret into the local `.env`, then generate a Fernet key for `STRAVA_TOKEN_ENCRYPTION_KEY` from the backend directory:
+
+```bash
+cd backend
+poetry run python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+```
+
+Keep that key stable for the lifetime of stored connections. Never commit the client secret, encryption key, or local environment files.
 
 Strava configuration is validated only when a Strava endpoint is invoked, so an unconfigured provider does not prevent `/health` from starting. Begin authorization by navigating the browser to `GET /api/v1/strava/connect`. Connection state is available from `GET /api/v1/strava/status`, and `POST /api/v1/strava/disconnect` revokes the provider credential before deleting it locally.
 
@@ -81,6 +89,15 @@ The request runs synchronously and returns page, fetch, insert, update, and unsu
 | `make test` | Run backend and frontend unit tests |
 | `make lint` | Run Ruff and ESLint |
 | `make migrate` | Apply Alembic migrations to the configured local database |
+
+Backend commands run through Poetry. Their direct equivalents, from `backend/`, are:
+
+```bash
+poetry run pytest
+poetry run ruff check .
+poetry run alembic upgrade head
+poetry run uvicorn app.main:app --reload
+```
 
 ## Current limitations and next integrations
 
