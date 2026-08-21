@@ -4,6 +4,7 @@ from enum import StrEnum
 from sqlalchemy import (
     ARRAY,
     BigInteger,
+    Boolean,
     CheckConstraint,
     DateTime,
     Enum,
@@ -55,9 +56,14 @@ class StravaConnection(Base):
     __tablename__ = "strava_connections"
     __table_args__ = (
         UniqueConstraint("strava_athlete_id", name="uq_strava_connections_athlete_id"),
+        UniqueConstraint("singleton_slot", name="uq_strava_connections_singleton"),
+        CheckConstraint("singleton_slot", name="ck_strava_connections_singleton"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    singleton_slot: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
     strava_athlete_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     access_token: Mapped[str] = mapped_column(
         "access_token_ciphertext", EncryptedToken(), nullable=False

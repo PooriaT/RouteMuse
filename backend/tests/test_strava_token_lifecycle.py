@@ -145,3 +145,26 @@ def test_repository_preserves_controlled_token_protection_error() -> None:
         repository.commit()
 
     assert str(error.value) == "safe configuration error"
+
+
+def test_repository_replaces_different_athlete_in_singleton_slot() -> None:
+    existing = _connection(datetime.now(UTC) + timedelta(hours=2))
+    existing.id = 10
+    session = MagicMock()
+    session.scalar.return_value = existing
+    repository = StravaConnectionRepository(session)
+
+    replacement = repository.upsert(
+        athlete_id=456,
+        access_token="replacement-access",
+        refresh_token="replacement-refresh",
+        access_token_expires_at=datetime.now(UTC) + timedelta(hours=6),
+        granted_scopes=["activity:read_all"],
+    )
+
+    session.delete.assert_called_once_with(existing)
+    session.flush.assert_called_once_with()
+    session.add.assert_called_once_with(replacement)
+    assert replacement is not existing
+    assert replacement.singleton_slot is True
+    assert replacement.strava_athlete_id == 456

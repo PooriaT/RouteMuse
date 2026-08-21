@@ -1,3 +1,4 @@
+from typing import Literal
 from urllib.parse import urlencode, urlparse
 
 import httpx
@@ -89,18 +90,23 @@ class StravaOAuthClient:
                 "Strava did not complete the token refresh."
             ) from exc
 
-    async def revoke_token(self, refresh_token: str) -> None:
+    async def revoke_token(
+        self,
+        token: str,
+        *,
+        token_type_hint: Literal["access_token", "refresh_token"],
+    ) -> None:
         client_id, client_secret, _ = self._configuration()
         try:
             response = await self._post(
                 STRAVA_REVOKE_URL,
-                data={"token": refresh_token, "token_type_hint": "refresh_token"},
+                data={"token": token, "token_type_hint": token_type_hint},
                 auth=httpx.BasicAuth(client_id, client_secret),
             )
             response.raise_for_status()
         except httpx.HTTPError as exc:
             raise StravaTokenRevocationFailed(
-                "Strava did not confirm token revocation; retry is safe."
+                "Strava did not confirm token revocation."
             ) from exc
 
     def _configuration(self) -> tuple[str, str, str]:

@@ -56,14 +56,19 @@ class StravaConnectionRepository:
         access_token_expires_at: datetime,
         granted_scopes: list[str],
     ) -> StravaConnection:
-        connection = self._session.scalar(
-            select(StravaConnection).where(
-                StravaConnection.strava_athlete_id == athlete_id
-            )
-        )
+        connection = self.get_current(for_update=True)
         now = datetime.now(UTC)
+        if connection is not None and connection.strava_athlete_id != athlete_id:
+            # RouteMuse currently has no application-user identity. Replace the
+            # singleton connection instead of leaving an older athlete available
+            # to resurface after the replacement is disconnected.
+            self._session.delete(connection)
+            self._session.flush()
+            connection = None
+
         if connection is None:
             connection = StravaConnection(
+                singleton_slot=True,
                 strava_athlete_id=athlete_id,
                 access_token=access_token,
                 refresh_token=refresh_token,

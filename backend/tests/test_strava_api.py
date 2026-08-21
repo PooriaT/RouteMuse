@@ -6,10 +6,12 @@ import httpx
 import pytest
 from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
+from sqlalchemy.exc import IntegrityError
 
 from app.core.config import Settings, get_settings
 from app.db.models import StravaConnection
 from app.db.repositories.strava import StravaConnectionStatus
+from app.db.security import TokenEncryptionConfigurationError
 from app.integrations.strava.client import StravaOAuthClient
 from app.integrations.strava.dependencies import (
     get_strava_connection_repository,
@@ -27,6 +29,7 @@ class FakeStravaConnectionRepository:
         self.connection: StravaConnection | None = None
         self.commits = 0
         self.rollbacks = 0
+        self.commit_error: Exception | None = None
 
     def get_current(self, *, for_update: bool = False) -> StravaConnection | None:
         return self.connection
@@ -64,6 +67,8 @@ class FakeStravaConnectionRepository:
         self.connection = None
 
     def commit(self) -> None:
+        if self.commit_error is not None:
+            raise self.commit_error
         self.commits += 1
 
     def rollback(self) -> None:
@@ -98,10 +103,11 @@ class StravaHTTPMock:
             )
         if request.url.path == "/oauth/revoke":
             assert request.url.query == b""
-            assert form == {
-                "token": [REFRESH_TOKEN],
-                "token_type_hint": ["refresh_token"],
-            }
+            assert form["token"][0] in {ACCESS_TOKEN, REFRESH_TOKEN}
+            expected_hint = (
+                "access_token" if form["token"] == [ACCESS_TOKEN] else "refresh_token"
+            )
+            assert form["token_type_hint"] == [expected_hint]
             assert request.headers["Authorization"].startswith("Basic ")
             return httpx.Response(self.revoke_status)
         raise AssertionError(f"Unexpected Strava request path: {request.url.path}")
@@ -349,6 +355,73 @@ def test_callback_handles_failed_token_exchange(
 
     assert response.status_code == 502
     assert response.json()["detail"]["code"] == "strava_token_exchange_failed"
+    _assert_no_credentials(response)
+
+
+def test_callback_revokes_issued_access_token_when_encrypted_persistence_fails(
+    client: TestClient,
+    repository: FakeStravaConnectionRepository,
+    strava_http_mock: StravaHTTPMock,
+) -> None:
+    repository.commit_error = TokenEncryptionConfigurationError(
+        "invalid encryption configuration"
+    )
+
+    response = _successful_callback(client)
+
+    assert response.status_code == 503
+    assert response.json()["detail"]["code"] == (
+        "strava_configuration_unavailable"
+    )
+    revoke_request = strava_http_mock.requests[-1]
+    assert revoke_request.url.path == "/oauth/revoke"
+    assert parse_qs(revoke_request.content.decode()) == {
+        "token": [ACCESS_TOKEN],
+        "token_type_hint": ["access_token"],
+    }
+    assert repository.rollbacks == 1
+    _assert_no_credentials(response)
+
+
+def test_callback_reports_failed_compensating_revocation_without_token_leakage(
+    client: TestClient,
+    repository: FakeStravaConnectionRepository,
+    strava_http_mock: StravaHTTPMock,
+) -> None:
+    repository.commit_error = TokenEncryptionConfigurationError(
+        "invalid encryption configuration"
+    )
+    strava_http_mock.revoke_status = 503
+
+    response = _successful_callback(client)
+
+    assert response.status_code == 502
+    assert response.json()["detail"]["code"] == "strava_token_revocation_failed"
+    assert repository.rollbacks == 1
+    _assert_no_credentials(response)
+
+
+def test_callback_revokes_issued_token_after_singleton_write_race(
+    client: TestClient,
+    repository: FakeStravaConnectionRepository,
+    strava_http_mock: StravaHTTPMock,
+) -> None:
+    repository.commit_error = IntegrityError(
+        "insert strava connection",
+        {},
+        RuntimeError("singleton conflict"),
+    )
+
+    response = _successful_callback(client)
+
+    assert response.status_code == 503
+    assert response.json()["detail"]["code"] == "strava_persistence_failed"
+    revoke_form = parse_qs(strava_http_mock.requests[-1].content.decode())
+    assert revoke_form == {
+        "token": [ACCESS_TOKEN],
+        "token_type_hint": ["access_token"],
+    }
+    assert repository.rollbacks == 1
     _assert_no_credentials(response)
 
 

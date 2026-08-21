@@ -6,6 +6,10 @@ class StravaConfigurationUnavailable(StravaIntegrationError):
     """Required Strava configuration is missing or invalid."""
 
 
+class StravaPersistenceFailed(StravaIntegrationError):
+    """The Strava connection could not be persisted safely."""
+
+
 class StravaAuthorizationDenied(StravaIntegrationError):
     """The athlete declined the requested authorization."""
 

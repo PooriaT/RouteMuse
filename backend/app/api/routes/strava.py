@@ -7,6 +7,7 @@ from typing import Annotated
 from fastapi import APIRouter, Cookie, Depends, Query, Request, Response, status
 from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel, Field
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.config import Settings, get_settings
 from app.db.repositories.strava import StravaConnectionRepository
@@ -24,6 +25,7 @@ from app.integrations.strava.errors import (
     StravaInsufficientScope,
     StravaIntegrationError,
     StravaOAuthStateInvalid,
+    StravaPersistenceFailed,
     StravaTokenExchangeFailed,
     StravaTokenRefreshFailed,
     StravaTokenRevocationFailed,
@@ -139,10 +141,18 @@ async def strava_callback(
             granted_scopes=sorted(granted_scopes),
         )
         repository.commit()
-    except TokenProtectionError as exc:
+    except (TokenProtectionError, SQLAlchemyError) as exc:
         repository.rollback()
-        raise StravaConfigurationUnavailable(
-            "Protected Strava token storage is unavailable."
+        await oauth_client.revoke_token(
+            token_result.access_token.get_secret_value(),
+            token_type_hint="access_token",
+        )
+        if isinstance(exc, TokenProtectionError):
+            raise StravaConfigurationUnavailable(
+                "Protected Strava token storage is unavailable."
+            ) from exc
+        raise StravaPersistenceFailed(
+            "The Strava connection could not be persisted."
         ) from exc
 
     _clear_state_cookie(response, settings)
@@ -194,7 +204,9 @@ async def disconnect_strava(
         return StravaConnectionStatusResponse(connected=False)
 
     try:
-        await oauth_client.revoke_token(connection.refresh_token)
+        await oauth_client.revoke_token(
+            connection.refresh_token, token_type_hint="refresh_token"
+        )
     except StravaIntegrationError:
         repository.rollback()
         raise
@@ -211,6 +223,12 @@ _ERROR_RESPONSES: tuple[
         status.HTTP_503_SERVICE_UNAVAILABLE,
         "strava_configuration_unavailable",
         "Strava integration configuration is unavailable.",
+    ),
+    (
+        StravaPersistenceFailed,
+        status.HTTP_503_SERVICE_UNAVAILABLE,
+        "strava_persistence_failed",
+        "The Strava connection could not be persisted.",
     ),
     (
         StravaAuthorizationDenied,
@@ -252,7 +270,7 @@ _ERROR_RESPONSES: tuple[
         StravaTokenRevocationFailed,
         status.HTTP_502_BAD_GATEWAY,
         "strava_token_revocation_failed",
-        "Strava did not confirm revocation; retry is safe.",
+        "Strava did not confirm token revocation.",
     ),
     (
         StravaAuthenticationInvalid,
