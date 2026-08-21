@@ -17,6 +17,9 @@ contains one `ActivityKindSummary` for each represented supported kind; it does
 not create zero-filled summaries for absent kinds. A null normalized kind is
 unsupported, is excluded from every supported summary, and increments
 `unsupported_activities_excluded` when it falls within the selected period.
+The result likewise contains one typed `ConsistencySignals` value for each
+represented kind. Consistency is never transferred between kinds: hiking cannot
+make road-cycling consistency appear higher.
 
 ## Summary fields and units
 
@@ -166,5 +169,118 @@ An empty period or a period containing only unsupported activities has
 `dominant_activity = null`. Unsupported activities cannot affect selection or
 the moving-time denominator because they do not produce activity-kind summaries.
 
-Consistency and recency scores, route matching, and user-facing profile
-explanations are intentionally defined by later athlete-profile issues.
+## Consistency and activity frequency
+
+`ConsistencySignals` is a typed, per-`ActivityKind` structure. It exposes facts
+and ratios rather than an opaque consistency, fitness, fatigue, or readiness
+score.
+
+`calendar_weeks` counts distinct Monday-based local calendar-week buckets that
+intersect the inclusive selected period. The first and last buckets each count
+as one denominator bucket even when the selected period contains only part of
+that week. Thus, a Thursday-through-next-Tuesday period intersects two buckets;
+it does not silently assume a 52-week year or prorate those two boundary buckets.
+
+`active_week_ratio` is calculated as:
+
+```text
+distinct active Monday-based local week buckets / calendar_weeks
+```
+
+An active bucket contains at least one activity of that kind. Deduplication makes
+the ratio independent of activity order and guarantees a value from `0.0` to
+`1.0`.
+
+`activities_per_week` is a separate frequency measure calculated against the
+entire selected period, including inactive days:
+
+```text
+activity_count * 7 / inclusive selected-period calendar days
+```
+
+It is not divided by active weeks. This exact-day weeklyization also defines all
+recent and baseline `WeeklyActivityVolume` fields.
+
+## Recent window and recent volume
+
+The named `RECENT_WINDOW_DAYS` constant is 28. The recent window ends on
+`period_end`, inclusively, and normally begins 27 local calendar days earlier.
+When the selected period is shorter than 28 days, the window begins at
+`period_start`. `nominal_window_days` remains 28 and `effective_window_days`
+reports the actual number of available days; `window_start` and `window_end`
+make the exact boundary auditable.
+
+For each represented activity kind, recent `ActivityVolume` exposes these
+separate values:
+
+- `activity_count`
+- `moving_time_seconds`
+- `distance_meters`
+- `active_weeks`, using the same Monday-based local buckets
+
+`weekly_volume` exposes `activities_per_week`,
+`moving_time_seconds_per_week`, and `distance_meters_per_week`. Each total is
+multiplied by `7 / effective_window_days`; no values are blended into a score.
+
+## Historical baseline and recent comparison
+
+The baseline is the part of the selected period strictly before the recent
+window: `period_start` through the local date immediately before
+`window_start`, both inclusive. `MIN_BASELINE_DAYS` is 28 calendar days. A
+shorter available interval returns `baseline = null` and
+`recent_to_baseline = null`; RouteMuse does not extrapolate a shorter baseline.
+
+When at least 28 baseline days are available, `HistoricalBaselineSignals`
+exposes its boundaries, `effective_days`, raw `volume`, and `weekly_volume`.
+The same exact-day weeklyization makes baselines of different lengths
+comparable. A sufficiently long baseline interval with no activities of that
+kind contains real zero volumes: that is an observed absence within the selected
+history, not missing duration.
+
+Each recent-to-baseline comparison is transparent and dimensionless. For
+example:
+
+```text
+moving_time_seconds_per_week_ratio =
+    recent moving_time_seconds_per_week
+    / baseline moving_time_seconds_per_week
+```
+
+Equivalent ratios are exposed for activity frequency and distance. A zero
+recent numerator with a positive baseline produces `0.0`. A zero baseline
+denominator produces `null`, never division by zero. Ratios are not converted
+into labels such as fit, unfit, overtrained, or detrained.
+
+## Inactivity gaps
+
+Gap calculations use distinct local activity dates in the supplied timezone.
+`days_since_last_activity` is the number of local calendar dates from the last
+activity date to `period_end`; it is zero when the last activity occurs on the
+period end date.
+
+`longest_inactivity_gap_days` is the maximum number of inactive local dates
+across all of these candidates:
+
+- `period_start` through the date before the first activity
+- dates strictly between each pair of consecutive activity dates
+- the date after the last activity through `period_end`
+
+For example, activities on January 1 and January 8 have six inactive dates
+between them. Multiple activities on one date do not create a negative or
+additional gap. Including both boundary gaps makes a long inactive tail visible.
+
+## Consistency missing-data semantics
+
+An empty period, a period with only unsupported activities, or an absent
+supported kind produces no `ConsistencySignals` entry for that kind rather than
+a fabricated profile. A represented kind always has period-wide frequency and
+gap facts, even with only one activity. A recent window with no activity has
+zero recent count, time, distance, and active weeks because zero is meaningful
+there. Insufficient baseline duration and ratios with zero denominators are
+`null` because those comparisons are mathematically unavailable.
+
+Capability ranges and consistency remain separate. Representative historical
+capability continues to use all valid observations in the selected period and
+is never reduced, replaced, or relabeled based on recent volume. Route matching,
+recommendation weighting, and user-facing profile explanations remain out of
+scope for these metrics.

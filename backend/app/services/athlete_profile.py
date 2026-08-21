@@ -9,11 +9,24 @@ from app.domain.athlete_profile import (
     ActivityAnalysisRecord,
     ActivityCapabilityRanges,
     ActivityKindSummary,
+    ActivityVolume,
     AthleteProfile,
+    ConsistencySignals,
     DominantActivityResult,
+    HistoricalBaselineSignals,
+    RecencySignals,
+    RecentToBaselineRatios,
     RepresentativeRange,
+    WeeklyActivityVolume,
 )
-from app.domain.calendar import calendar_period_bounds
+from app.domain.calendar import (
+    calendar_period_bounds,
+    calendar_week_bucket_count,
+    monday_week_start,
+)
+
+RECENT_WINDOW_DAYS = 28
+MIN_BASELINE_DAYS = 28
 
 _PACE_ACTIVITY_KINDS = frozenset(
     {
@@ -96,6 +109,18 @@ def calculate_activity_summaries(
             grouped.items(), key=lambda item: item[0].value
         )
     ]
+    consistency_signals = [
+        calculate_consistency_signals(
+            activity_kind,
+            records,
+            period_start=period_start,
+            period_end=period_end,
+            timezone=timezone,
+        )
+        for activity_kind, records in sorted(
+            grouped.items(), key=lambda item: item[0].value
+        )
+    ]
     return AthleteProfile(
         period_start=period_start,
         period_end=period_end,
@@ -104,6 +129,114 @@ def calculate_activity_summaries(
         unsupported_activities_excluded=unsupported_count,
         activity_summaries=summaries,
         dominant_activity=calculate_dominant_activity(summaries),
+        consistency_signals=consistency_signals,
+    )
+
+
+def calculate_consistency_signals(
+    activity_kind: ActivityKind,
+    activities: Iterable[ActivityAnalysisRecord],
+    *,
+    period_start: date,
+    period_end: date,
+    timezone: str,
+) -> ConsistencySignals:
+    """Calculate period-wide and recent signals for one represented kind."""
+
+    bounds = calendar_period_bounds(period_start, period_end, timezone)
+    zone = ZoneInfo(timezone)
+    records_with_dates = sorted(
+        (
+            (activity, activity.started_at.astimezone(zone).date())
+            for activity in activities
+            if activity.activity_kind is activity_kind
+            and bounds.start_at <= activity.started_at < bounds.end_at_exclusive
+        ),
+        key=lambda item: item[1],
+    )
+    if not records_with_dates:
+        raise ValueError("activities must contain the requested activity kind")
+
+    period_days = (period_end - period_start).days + 1
+    calendar_weeks = calendar_week_bucket_count(period_start, period_end)
+    local_dates = sorted({local_date for _, local_date in records_with_dates})
+    active_weeks = len({monday_week_start(local_date) for local_date in local_dates})
+
+    effective_recent_days = min(RECENT_WINDOW_DAYS, period_days)
+    recent_start = period_end - timedelta(days=effective_recent_days - 1)
+    recent_records = [
+        activity
+        for activity, local_date in records_with_dates
+        if local_date >= recent_start
+    ]
+    recent_volume = _activity_volume(recent_records, zone)
+    recent_weekly_volume = _weekly_activity_volume(
+        recent_volume, effective_recent_days
+    )
+
+    baseline_days = period_days - effective_recent_days
+    baseline: HistoricalBaselineSignals | None = None
+    recent_to_baseline: RecentToBaselineRatios | None = None
+    if baseline_days >= MIN_BASELINE_DAYS:
+        baseline_end = recent_start - timedelta(days=1)
+        baseline_records = [
+            activity
+            for activity, local_date in records_with_dates
+            if local_date < recent_start
+        ]
+        baseline_volume = _activity_volume(baseline_records, zone)
+        baseline_weekly_volume = _weekly_activity_volume(
+            baseline_volume, baseline_days
+        )
+        baseline = HistoricalBaselineSignals(
+            period_start=period_start,
+            period_end=baseline_end,
+            effective_days=baseline_days,
+            volume=baseline_volume,
+            weekly_volume=baseline_weekly_volume,
+        )
+        recent_to_baseline = RecentToBaselineRatios(
+            activities_per_week_ratio=_safe_ratio(
+                recent_weekly_volume.activities_per_week,
+                baseline_weekly_volume.activities_per_week,
+            ),
+            moving_time_seconds_per_week_ratio=_safe_ratio(
+                recent_weekly_volume.moving_time_seconds_per_week,
+                baseline_weekly_volume.moving_time_seconds_per_week,
+            ),
+            distance_meters_per_week_ratio=_safe_ratio(
+                recent_weekly_volume.distance_meters_per_week,
+                baseline_weekly_volume.distance_meters_per_week,
+            ),
+        )
+
+    between_activity_gaps = [
+        (later - earlier).days - 1
+        for earlier, later in zip(local_dates, local_dates[1:], strict=False)
+    ]
+    longest_inactivity_gap_days = max(
+        (local_dates[0] - period_start).days,
+        (period_end - local_dates[-1]).days,
+        *between_activity_gaps,
+    )
+
+    return ConsistencySignals(
+        activity_kind=activity_kind,
+        calendar_weeks=calendar_weeks,
+        active_week_ratio=active_weeks / calendar_weeks,
+        activities_per_week=len(records_with_dates) * 7 / period_days,
+        longest_inactivity_gap_days=longest_inactivity_gap_days,
+        days_since_last_activity=(period_end - local_dates[-1]).days,
+        recency=RecencySignals(
+            nominal_window_days=RECENT_WINDOW_DAYS,
+            effective_window_days=effective_recent_days,
+            window_start=recent_start,
+            window_end=period_end,
+            volume=recent_volume,
+            weekly_volume=recent_weekly_volume,
+            baseline=baseline,
+            recent_to_baseline=recent_to_baseline,
+        ),
     )
 
 
@@ -186,7 +319,7 @@ def _summarize_activity_kind(
     active_week_starts: set[date] = set()
     for activity in activities:
         local_date = activity.started_at.astimezone(zone).date()
-        active_week_starts.add(local_date - timedelta(days=local_date.weekday()))
+        active_week_starts.add(monday_week_start(local_date))
 
     return ActivityKindSummary(
         activity_kind=activity_kind,
@@ -216,3 +349,37 @@ def _summarize_activity_kind(
             ),
         ),
     )
+
+
+def _activity_volume(
+    activities: Iterable[ActivityAnalysisRecord], zone: ZoneInfo
+) -> ActivityVolume:
+    records = list(activities)
+    return ActivityVolume(
+        activity_count=len(records),
+        moving_time_seconds=sum(activity.moving_time_seconds for activity in records),
+        distance_meters=fsum(activity.distance_meters for activity in records),
+        active_weeks=len(
+            {
+                monday_week_start(activity.started_at.astimezone(zone).date())
+                for activity in records
+            }
+        ),
+    )
+
+
+def _weekly_activity_volume(
+    volume: ActivityVolume, effective_days: int
+) -> WeeklyActivityVolume:
+    weeklyization_factor = 7 / effective_days
+    return WeeklyActivityVolume(
+        activities_per_week=volume.activity_count * weeklyization_factor,
+        moving_time_seconds_per_week=(
+            volume.moving_time_seconds * weeklyization_factor
+        ),
+        distance_meters_per_week=volume.distance_meters * weeklyization_factor,
+    )
+
+
+def _safe_ratio(numerator: float, denominator: float) -> float | None:
+    return numerator / denominator if denominator > 0 else None
