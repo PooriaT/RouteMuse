@@ -61,6 +61,37 @@ describe("RouteMuse API client", () => {
     );
   });
 
+  it("posts a typed athlete-profile request as JSON", async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse({
+        period_start: "2026-08-01",
+        period_end: "2026-08-31",
+        timezone: "America/Vancouver",
+        activities_analyzed: 0,
+        unsupported_activities_excluded: 0,
+        activity_summaries: [],
+        dominant_activity: null,
+        consistency_signals: [],
+      }),
+    );
+    const request = {
+      start_date: "2026-08-01",
+      end_date: "2026-08-31",
+      timezone: "America/Vancouver",
+    };
+
+    await api.athleteProfile(request);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:8000/api/v1/athlete-profile",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify(request),
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+  });
+
   it("preserves safe status, retry, and partial-result error metadata", async () => {
     const partial = {
       status: "partial",

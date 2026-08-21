@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ApiError, api } from "@/lib/api/client";
+import type { AthleteProfileRequest } from "@/types/athleteProfile";
 import type { StravaSynchronizationResult } from "@/types/strava";
 
 import type { HistoricalDateRange } from "./dateRange";
@@ -16,11 +17,19 @@ type ConnectionState =
 type StravaActivitySyncProps = {
   dates: HistoricalDateRange;
   hasInvalidRange: boolean;
+  timezone: string | null;
+  onConnectionChange: (connected: boolean | null) => void;
+  onSynchronizationComplete: (request: AthleteProfileRequest) => void;
+  onSynchronizationPartial: () => void;
 };
 
 export function StravaActivitySync({
   dates,
   hasInvalidRange,
+  timezone,
+  onConnectionChange,
+  onSynchronizationComplete,
+  onSynchronizationPartial,
 }: StravaActivitySyncProps) {
   const [connection, setConnection] = useState<ConnectionState>({
     status: "checking",
@@ -36,20 +45,23 @@ export function StravaActivitySync({
   const refreshConnection = useCallback(async () => {
     setConnection({ status: "checking" });
     setConnectionError(null);
+    onConnectionChange(null);
     try {
       const response = await api.stravaStatus();
+      onConnectionChange(response.connected);
       setConnection(
         response.connected
           ? { status: "connected" }
           : { status: "disconnected" },
       );
     } catch {
+      onConnectionChange(null);
       setConnection({ status: "error" });
       setConnectionError(
         "RouteMuse could not check your Strava connection. Try again.",
       );
     }
-  }, []);
+  }, [onConnectionChange]);
 
   useEffect(() => {
     void refreshConnection();
@@ -83,7 +95,8 @@ export function StravaActivitySync({
       connection.status !== "connected" ||
       hasInvalidRange ||
       !dates.startDate ||
-      !dates.endDate
+      !dates.endDate ||
+      !timezone
     ) {
       return;
     }
@@ -93,18 +106,25 @@ export function StravaActivitySync({
     setSyncResult(null);
     setSyncError(null);
     try {
-      const result = await api.syncStravaActivities({
+      const request = {
         start_date: dates.startDate,
         end_date: dates.endDate,
-        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      });
+        timezone,
+      };
+      const result = await api.syncStravaActivities(request);
       setSyncResult(result);
+      if (result.status === "completed") {
+        onSynchronizationComplete(request);
+      } else if (result.status === "partial") {
+        onSynchronizationPartial();
+      }
     } catch (error) {
       if (
         error instanceof ApiError &&
         error.synchronization?.status === "partial"
       ) {
         setSyncResult(error.synchronization);
+        onSynchronizationPartial();
       }
       setSyncError(syncErrorMessage(error));
     } finally {
@@ -116,6 +136,7 @@ export function StravaActivitySync({
   const canSynchronize =
     connection.status === "connected" &&
     Boolean(dates.startDate && dates.endDate) &&
+    Boolean(timezone) &&
     !hasInvalidRange &&
     !importing;
 

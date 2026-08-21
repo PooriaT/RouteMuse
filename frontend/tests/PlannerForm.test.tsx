@@ -9,6 +9,8 @@ import type {
   StravaSynchronizationResult,
 } from "@/types/strava";
 
+import { athleteProfile, emptyAthleteProfile } from "./athleteProfileFixture";
+
 vi.mock("@/lib/api/client", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api/client")>();
   return {
@@ -21,6 +23,7 @@ vi.mock("@/lib/api/client", async (importOriginal) => {
       stravaStatus: vi.fn(),
       disconnectStrava: vi.fn(),
       syncStravaActivities: vi.fn(),
+      athleteProfile: vi.fn(),
     },
   };
 });
@@ -78,6 +81,7 @@ beforeEach(() => {
   vi.mocked(api.stravaStatus).mockResolvedValue(disconnected);
   vi.mocked(api.disconnectStrava).mockResolvedValue(disconnected);
   vi.mocked(api.syncStravaActivities).mockResolvedValue(completed);
+  vi.mocked(api.athleteProfile).mockResolvedValue(emptyAthleteProfile);
 });
 
 afterEach(() => {
@@ -137,6 +141,7 @@ describe("PlannerForm", () => {
       "href",
       "http://localhost:8000/api/v1/strava/connect",
     );
+    expect(api.athleteProfile).not.toHaveBeenCalled();
   });
 
   it("shows the server-verified connected state", async () => {
@@ -144,6 +149,20 @@ describe("PlannerForm", () => {
 
     expect(screen.getByText("Connected to Strava")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Disconnect" })).toBeEnabled();
+  });
+
+  it("loads an existing persisted profile only after confirming the connection", async () => {
+    mockConnected();
+    vi.mocked(api.athleteProfile).mockResolvedValue(athleteProfile);
+
+    renderPlanner();
+
+    expect(await screen.findAllByText("Road cycling")).toHaveLength(2);
+    expect(api.athleteProfile).toHaveBeenCalledWith({
+      start_date: "2025-08-19",
+      end_date: "2026-08-19",
+      timezone: expect.any(String),
+    });
   });
 
   it("rechecks server status when the planner is restored after OAuth navigation", async () => {
@@ -181,6 +200,11 @@ describe("PlannerForm", () => {
     expect(screen.getByRole("alert")).toHaveTextContent(
       "Start date must be on or before end date.",
     );
+    expect(
+      screen.getByText(
+        "Choose a valid historical period to load the athlete profile.",
+      ),
+    ).toBeInTheDocument();
     expect(importButton).toBeDisabled();
     fireEvent.click(importButton);
     expect(api.syncStravaActivities).not.toHaveBeenCalled();
@@ -261,6 +285,25 @@ describe("PlannerForm", () => {
     );
   });
 
+  it("refreshes the profile after a completed synchronization", async () => {
+    vi.mocked(api.athleteProfile)
+      .mockResolvedValueOnce(emptyAthleteProfile)
+      .mockResolvedValueOnce(athleteProfile);
+    const importButton = await renderConnectedPlanner();
+    await waitFor(() => expect(api.athleteProfile).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(importButton);
+
+    expect(await screen.findByText("Activity import complete")).toBeInTheDocument();
+    expect(await screen.findAllByText("Road cycling")).toHaveLength(2);
+    expect(api.athleteProfile).toHaveBeenCalledTimes(2);
+    expect(api.athleteProfile).toHaveBeenLastCalledWith({
+      start_date: "2025-08-19",
+      end_date: "2026-08-19",
+      timezone: expect.any(String),
+    });
+  });
+
   it("shows a dedicated zero-activity state", async () => {
     vi.mocked(api.syncStravaActivities).mockResolvedValue({
       ...completed,
@@ -301,6 +344,25 @@ describe("PlannerForm", () => {
       "Retry in about 2 minutes",
     );
     expect(screen.getByRole("alert")).not.toHaveTextContent("raw provider message");
+    expect(screen.getByText("Profile refresh paused")).toBeInTheDocument();
+    expect(screen.queryByText("Primary activity")).not.toBeInTheDocument();
+    expect(api.athleteProfile).toHaveBeenCalledTimes(1);
+  });
+
+  it("recovers from a profile API failure without exposing raw payloads", async () => {
+    vi.mocked(api.athleteProfile).mockRejectedValueOnce(
+      new ApiError("raw FastAPI detail", 503, "athlete_profile_unavailable"),
+    );
+    await renderConnectedPlanner();
+
+    const alert = await screen.findByText(/profile is temporarily unavailable/i);
+    expect(alert).toHaveAttribute("role", "alert");
+    expect(alert).not.toHaveTextContent("raw FastAPI detail");
+
+    vi.mocked(api.athleteProfile).mockResolvedValueOnce(athleteProfile);
+    fireEvent.click(screen.getByRole("button", { name: "Retry profile" }));
+
+    expect(await screen.findAllByText("Road cycling")).toHaveLength(2);
   });
 
   it("shows a concise temporary-provider error", async () => {
