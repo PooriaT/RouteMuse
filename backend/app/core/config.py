@@ -1,6 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 from typing import Annotated
+from urllib.parse import urlsplit
 
 from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
@@ -19,6 +20,7 @@ class Settings(BaseSettings):
     cors_origins: Annotated[list[str], NoDecode] = Field(
         default_factory=lambda: ["http://localhost:3000"]
     )
+    frontend_url: str = "http://localhost:3000"
     strava_client_id: str | None = None
     strava_client_secret: SecretStr | None = None
     strava_redirect_uri: str | None = None
@@ -30,6 +32,24 @@ class Settings(BaseSettings):
         """Accept a comma-separated environment value or an explicit list."""
         if isinstance(value, str):
             return [origin.strip() for origin in value.split(",") if origin.strip()]
+        return value
+
+    @field_validator("frontend_url")
+    @classmethod
+    def validate_frontend_url(cls, value: str) -> str:
+        parsed = urlsplit(value)
+        if (
+            parsed.scheme not in {"http", "https"}
+            or not parsed.netloc
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.query
+            or parsed.fragment
+        ):
+            raise ValueError(
+                "frontend_url must be an HTTP(S) URL without credentials, "
+                "query, or fragment"
+            )
         return value
 
 

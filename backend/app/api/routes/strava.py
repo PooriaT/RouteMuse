@@ -143,9 +143,12 @@ async def connect_strava(
     return response
 
 
-@router.get("/callback", response_model=StravaConnectionStatusResponse)
+@router.get(
+    "/callback",
+    response_class=RedirectResponse,
+    status_code=status.HTTP_303_SEE_OTHER,
+)
 async def strava_callback(
-    response: Response,
     oauth_client: Annotated[StravaOAuthClient, Depends(get_strava_oauth_client)],
     repository: Annotated[
         StravaConnectionRepository, Depends(get_strava_connection_repository)
@@ -156,7 +159,7 @@ async def strava_callback(
     scope: Annotated[str | None, Query()] = None,
     error: Annotated[str | None, Query()] = None,
     cookie_state: Annotated[str | None, Cookie(alias=STRAVA_STATE_COOKIE)] = None,
-) -> StravaConnectionStatusResponse:
+) -> RedirectResponse:
     if not state_value or not cookie_state or not hmac.compare_digest(
         state_value, cookie_state
     ):
@@ -175,7 +178,7 @@ async def strava_callback(
     granted_scopes = _require_scope(scope)
     token_result = await oauth_client.exchange_code(code)
     try:
-        connection = repository.upsert(
+        repository.upsert(
             athlete_id=token_result.athlete.id,
             access_token=token_result.access_token.get_secret_value(),
             refresh_token=token_result.refresh_token.get_secret_value(),
@@ -199,14 +202,14 @@ async def strava_callback(
             "The Strava connection could not be persisted."
         ) from exc
 
-    _clear_state_cookie(response, settings)
-    response.headers["Cache-Control"] = "no-store"
-    response.headers["Referrer-Policy"] = "no-referrer"
-    return StravaConnectionStatusResponse(
-        connected=True,
-        athlete_id=str(connection.strava_athlete_id),
-        granted_scopes=sorted(granted_scopes),
+    redirect = RedirectResponse(
+        settings.frontend_url,
+        status_code=status.HTTP_303_SEE_OTHER,
     )
+    _clear_state_cookie(redirect, settings)
+    redirect.headers["Cache-Control"] = "no-store"
+    redirect.headers["Referrer-Policy"] = "no-referrer"
+    return redirect
 
 
 @router.get("/status", response_model=StravaConnectionStatusResponse)

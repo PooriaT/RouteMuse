@@ -5,6 +5,7 @@ import { useEffect, useId, useState } from "react";
 import type { ActivityType } from "@/types/activity";
 
 import { defaultHistoricalDateRange, type HistoricalDateRange } from "./dateRange";
+import { StravaActivitySync } from "./StravaActivitySync";
 
 type PlannerFormProps = {
   activityTypes: ActivityType[];
@@ -79,15 +80,7 @@ export function PlannerForm({
             Start date must be on or before end date.
           </p>
         )}
-        <button
-          type="button"
-          disabled
-          aria-describedby="strava-status"
-          className="mt-5 cursor-not-allowed rounded-lg bg-slate-300 px-5 py-3 text-slate-600 disabled:opacity-75"
-        >
-          Connect with Strava
-        </button>
-        <p id="strava-status" className="mt-2 text-sm text-slate-500">Not implemented. No connection or import will occur.</p>
+        <StravaActivitySync dates={dates} hasInvalidRange={hasInvalidRange} />
       </section>
 
       <section aria-labelledby="preferences-heading" className="mb-6 rounded-xl bg-white p-6 shadow-sm">
@@ -107,7 +100,7 @@ export function PlannerForm({
           <label>Desired challenge, optional<select defaultValue=""><option value="">Any challenge</option><option value="easy">Easy</option><option value="moderate">Moderate</option><option value="hard">Hard</option></select></label>
           <label>Route shape, optional<select defaultValue=""><option value="">Any route shape</option><option value="loop">Loop</option><option value="out-and-back">Out-and-back</option><option value="point-to-point">Point-to-point</option></select></label>
         </fieldset>
-        <p id="preferences-status" className="mt-4 text-sm text-slate-500">Planning controls are unavailable until activity import is implemented.</p>
+        <p id="preferences-status" className="mt-4 text-sm text-slate-500">Athlete analysis and route planning are not available yet.</p>
         {activityTypesUnavailable && (
           <p role="status" className="mt-2 text-sm text-amber-700">Activity types are temporarily unavailable. Try again when the RouteMuse API is running.</p>
         )}

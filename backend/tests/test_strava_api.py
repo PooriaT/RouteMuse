@@ -122,6 +122,7 @@ def settings() -> Settings:
         strava_client_secret="test-client-secret",
         strava_redirect_uri="http://testserver/api/v1/strava/callback",
         strava_token_encryption_key=Fernet.generate_key().decode("ascii"),
+        frontend_url="http://frontend.test/planner",
         _env_file=None,
     )
 
@@ -169,6 +170,7 @@ def _successful_callback(client: TestClient) -> httpx.Response:
             "state": state_value,
             "scope": "activity:read_all",
         },
+        follow_redirects=False,
     )
 
 
@@ -254,17 +256,13 @@ def test_missing_configuration_is_controlled_and_health_still_works() -> None:
     assert health_response.status_code == 200
 
 
-def test_callback_accepts_token_response_without_scope_and_persists_connection(
+def test_callback_persists_connection_and_redirects_to_the_planner(
     client: TestClient, repository: FakeStravaConnectionRepository
 ) -> None:
     response = _successful_callback(client)
 
-    assert response.status_code == 200
-    assert response.json() == {
-        "connected": True,
-        "athlete_id": "9223372036854775000",
-        "granted_scopes": ["activity:read_all"],
-    }
+    assert response.status_code == 303
+    assert response.headers["location"] == "http://frontend.test/planner"
     assert repository.connection is not None
     assert repository.connection.access_token == ACCESS_TOKEN
     assert repository.connection.refresh_token == REFRESH_TOKEN
@@ -429,7 +427,7 @@ def test_status_reports_connected_and_disconnected_without_tokens(
     client: TestClient,
 ) -> None:
     disconnected = client.get("/api/v1/strava/status")
-    callback = _successful_callback(client)
+    _successful_callback(client)
     connected = client.get("/api/v1/strava/status")
 
     assert disconnected.json() == {
@@ -437,7 +435,11 @@ def test_status_reports_connected_and_disconnected_without_tokens(
         "athlete_id": None,
         "granted_scopes": [],
     }
-    assert connected.json() == callback.json()
+    assert connected.json() == {
+        "connected": True,
+        "athlete_id": "9223372036854775000",
+        "granted_scopes": ["activity:read_all"],
+    }
     _assert_no_credentials(disconnected)
     _assert_no_credentials(connected)
 
