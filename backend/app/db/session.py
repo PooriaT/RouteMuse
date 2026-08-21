@@ -14,7 +14,7 @@ SessionLocal = sessionmaker(
 )
 
 
-def get_db_session() -> Generator[Session, None, None]:
+def get_db_session() -> Generator[Session]:
     """Provide a request-scoped session and always release it afterwards."""
     with SessionLocal() as session:
         yield session

@@ -2,10 +2,10 @@
 dev:
 	cd frontend && npm run dev
 test:
-	cd backend && python -m pytest
+	cd backend && poetry run pytest
 	cd frontend && npm test
 lint:
-	cd backend && ruff check .
+	cd backend && poetry run ruff check .
 	cd frontend && npm run lint
 migrate:
-	cd backend && alembic upgrade head
+	cd backend && poetry run alembic upgrade head
