@@ -13,7 +13,6 @@ class StravaTokenExchangeDTO(BaseModel):
     access_token: SecretStr
     refresh_token: SecretStr
     expires_at: int
-    scope: str
     athlete: StravaAthleteDTO
 
 

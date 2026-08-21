@@ -126,17 +126,8 @@ async def strava_callback(
             "The Strava callback did not include an authorization code."
         )
 
-    _require_scope(scope)
+    granted_scopes = _require_scope(scope)
     token_result = await oauth_client.exchange_code(code)
-    try:
-        granted_scopes = _require_scope(token_result.scope)
-    except StravaInsufficientScope:
-        # Do not retain an unusable provider grant after the user declines the
-        # minimum scope in Strava's consent screen.
-        await oauth_client.revoke_token(
-            token_result.refresh_token.get_secret_value()
-        )
-        raise
     try:
         connection = repository.upsert(
             athlete_id=token_result.athlete.id,

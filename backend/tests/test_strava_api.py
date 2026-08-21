@@ -73,7 +73,6 @@ class FakeStravaConnectionRepository:
 class StravaHTTPMock:
     def __init__(self) -> None:
         self.token_status = 200
-        self.token_scope = "activity:read_all"
         self.revoke_status = 200
         self.requests: list[httpx.Request] = []
 
@@ -94,7 +93,6 @@ class StravaHTTPMock:
                     "expires_at": int(
                         (datetime.now(UTC) + timedelta(hours=6)).timestamp()
                     ),
-                    "scope": self.token_scope,
                     "athlete": {"id": 9223372036854775000, "username": "ignored"},
                 },
             )
@@ -250,7 +248,7 @@ def test_missing_configuration_is_controlled_and_health_still_works() -> None:
     assert health_response.status_code == 200
 
 
-def test_successful_callback_persists_connection_without_leaking_tokens(
+def test_callback_accepts_token_response_without_scope_and_persists_connection(
     client: TestClient, repository: FakeStravaConnectionRepository
 ) -> None:
     response = _successful_callback(client)
@@ -340,22 +338,6 @@ def test_callback_rejects_unknown_provider_error_as_malformed(
     assert response.status_code == 400
     assert response.json()["detail"]["code"] == "strava_callback_malformed"
     assert "max-age=0" in response.headers["set-cookie"].lower()
-
-
-def test_callback_rejects_scope_missing_from_token_response(
-    client: TestClient, strava_http_mock: StravaHTTPMock
-) -> None:
-    strava_http_mock.token_scope = "activity:read"
-
-    response = _successful_callback(client)
-
-    assert response.status_code == 400
-    assert response.json()["detail"]["code"] == "strava_insufficient_scope"
-    assert [request.url.path for request in strava_http_mock.requests] == [
-        "/oauth/token",
-        "/oauth/revoke",
-    ]
-    _assert_no_credentials(response)
 
 
 def test_callback_handles_failed_token_exchange(
