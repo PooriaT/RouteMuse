@@ -48,3 +48,19 @@ def calendar_period_bounds(
         start_at=local_start.astimezone(UTC),
         end_at_exclusive=local_end_exclusive.astimezone(UTC),
     )
+
+
+def monday_week_start(local_date: date) -> date:
+    """Return the Monday starting ``local_date``'s calendar-week bucket."""
+
+    return local_date - timedelta(days=local_date.weekday())
+
+
+def calendar_week_bucket_count(period_start: date, period_end: date) -> int:
+    """Count Monday-based week buckets intersecting an inclusive date period."""
+
+    if period_start > period_end:
+        raise ValueError("period_start must be on or before period_end")
+    first_week = monday_week_start(period_start)
+    last_week = monday_week_start(period_end)
+    return ((last_week - first_week).days // 7) + 1

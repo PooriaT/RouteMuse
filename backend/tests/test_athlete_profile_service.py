@@ -131,6 +131,7 @@ def test_zero_activities_returns_an_empty_typed_profile() -> None:
     assert profile.unsupported_activities_excluded == 0
     assert profile.activity_summaries == []
     assert profile.dominant_activity is None
+    assert profile.consistency_signals == []
 
 
 def test_one_activity_uses_its_values_as_medians() -> None:
@@ -295,6 +296,7 @@ def test_period_with_only_unsupported_activities_is_safe() -> None:
     assert profile.unsupported_activities_excluded == 1
     assert profile.activity_summaries == []
     assert profile.dominant_activity is None
+    assert profile.consistency_signals == []
 
 
 def test_activities_outside_selected_local_period_are_excluded() -> None:
