@@ -1,28 +1,39 @@
 from datetime import date
 
-from pydantic import BaseModel, Field
+from pydantic import AwareDatetime, BaseModel, Field
 
 from app.domain.activities import ActivityKind
 
 
-class EffortStatistics(BaseModel):
-    typical_distance_meters: float | None = None
-    strong_distance_meters: float | None = None
-    typical_duration_seconds: int | None = None
+class ActivityAnalysisRecord(BaseModel):
+    """Provider-neutral historical activity facts used by athlete analysis."""
+
+    activity_kind: ActivityKind | None
+    started_at: AwareDatetime
+    distance_meters: float = Field(ge=0)
+    moving_time_seconds: int = Field(ge=0)
+    elevation_gain_meters: float | None = Field(default=None, ge=0)
+
+
+class ActivityKindSummary(BaseModel):
+    """Deterministic aggregates for one represented RouteMuse activity kind."""
+
+    activity_kind: ActivityKind
+    activity_count: int = Field(ge=1)
+    total_distance_meters: float = Field(ge=0)
+    total_moving_time_seconds: int = Field(ge=0)
+    total_elevation_gain_meters: float | None = Field(default=None, ge=0)
+    elevation_sample_count: int = Field(ge=0)
+    active_weeks: int = Field(ge=1)
+    median_distance_meters: float = Field(ge=0)
+    median_moving_time_seconds: float = Field(ge=0)
+    median_elevation_gain_meters: float | None = Field(default=None, ge=0)
 
 
 class AthleteProfile(BaseModel):
     period_start: date
     period_end: date
-    dominant_activity: ActivityKind | None = None
+    timezone: str
     activities_analyzed: int = Field(default=0, ge=0)
-    activity_counts: dict[ActivityKind, int] = Field(default_factory=dict)
-    moving_time_seconds: dict[ActivityKind, int] = Field(default_factory=dict)
-    distance_meters: dict[ActivityKind, float] = Field(default_factory=dict)
-    elevation_gain_meters: dict[ActivityKind, float] = Field(default_factory=dict)
-    activities_per_week: float | None = None
-    consistency_indicators: dict[str, float] = Field(default_factory=dict)
-    representative_efforts: dict[ActivityKind, EffortStatistics] = Field(
-        default_factory=dict
-    )
-    recent_activity_indicators: dict[str, float] = Field(default_factory=dict)
+    unsupported_activities_excluded: int = Field(default=0, ge=0)
+    activity_summaries: list[ActivityKindSummary] = Field(default_factory=list)

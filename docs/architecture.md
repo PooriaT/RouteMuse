@@ -48,4 +48,4 @@ Because RouteMuse does not yet have application-user identities, Strava persiste
 7. Persistence concerns remain outside RouteMuse domain models.
 8. External implementations remain replaceable through small provider contracts.
 
-The application deliberately contains no athlete analytics, scoring, or LLM calls. The live Strava integration provides OAuth connection and token lifecycle behavior, a pure provider-to-domain activity normalization boundary, and synchronous historical activity synchronization with durable completed, partial, or failed run metadata.
+The application currently contains a deterministic, provider-neutral first layer of athlete analytics that summarizes supported historical activities by RouteMuse activity kind. It contains no route scoring or LLM calls. The live Strava integration provides OAuth connection and token lifecycle behavior, a pure provider-to-domain activity normalization boundary, and synchronous historical activity synchronization with durable completed, partial, or failed run metadata.
