@@ -3,7 +3,6 @@ import re
 import secrets
 from datetime import UTC, date, datetime
 from typing import Annotated
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError, available_timezones
 
 from fastapi import APIRouter, Cookie, Depends, Query, Request, Response, status
 from fastapi.responses import JSONResponse, RedirectResponse
@@ -13,6 +12,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.core.config import Settings, get_settings
 from app.db.repositories.strava import StravaConnectionRepository
 from app.db.security import TokenProtectionError
+from app.domain.calendar import resolve_iana_timezone
 from app.integrations.strava.client import REQUIRED_STRAVA_SCOPE, StravaOAuthClient
 from app.integrations.strava.dependencies import (
     get_strava_connection_repository,
@@ -47,9 +47,6 @@ from app.integrations.strava.synchronization import (
 STRAVA_STATE_COOKIE = "routemuse_strava_oauth_state"
 STRAVA_STATE_MAX_AGE_SECONDS = 600
 STRAVA_CALLBACK_PATH = "/api/v1/strava/callback"
-_IANA_TIMEZONES = frozenset(available_timezones())
-_SYSTEM_DEPENDENT_TIMEZONE_KEYS = frozenset({"localtime", "posixrules"})
-
 router = APIRouter(prefix="/strava", tags=["strava"])
 
 
@@ -67,16 +64,7 @@ class StravaSynchronizationRequest(BaseModel):
     @field_validator("timezone")
     @classmethod
     def validate_timezone(cls, value: str) -> str:
-        if (
-            value not in _IANA_TIMEZONES
-            or value in _SYSTEM_DEPENDENT_TIMEZONE_KEYS
-            or value.startswith(("posix/", "right/"))
-        ):
-            raise ValueError("timezone must be a valid IANA timezone")
-        try:
-            ZoneInfo(value)
-        except (ZoneInfoNotFoundError, ValueError) as exc:
-            raise ValueError("timezone must be a valid IANA timezone") from exc
+        resolve_iana_timezone(value)
         return value
 
     @model_validator(mode="after")

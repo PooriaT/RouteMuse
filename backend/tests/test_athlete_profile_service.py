@@ -328,3 +328,17 @@ def test_invalid_period_is_rejected(
             period_end=period_end,
             timezone="UTC",
         )
+
+
+@pytest.mark.parametrize(
+    "timezone",
+    ["localtime", "posixrules", "posix/UTC", "right/UTC"],
+)
+def test_system_dependent_timezone_keys_are_rejected(timezone: str) -> None:
+    with pytest.raises(ValueError, match="valid IANA timezone"):
+        calculate_activity_summaries(
+            [],
+            period_start=date(2026, 1, 1),
+            period_end=date(2026, 1, 31),
+            timezone=timezone,
+        )

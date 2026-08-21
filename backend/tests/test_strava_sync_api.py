@@ -4,7 +4,6 @@ from datetime import date
 import pytest
 from fastapi.testclient import TestClient
 
-from app.api.routes import strava as strava_routes
 from app.core.config import Settings
 from app.db.models import SynchronizationStatus
 from app.integrations.strava.dependencies import get_strava_synchronization_service
@@ -141,14 +140,7 @@ def test_sync_endpoint_returns_controlled_validation_errors(
 def test_sync_endpoint_rejects_system_dependent_localtime_key(
     client: TestClient,
     successful_service: StubSynchronizationService,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(
-        strava_routes,
-        "_IANA_TIMEZONES",
-        frozenset({"UTC", "localtime"}),
-    )
-
     response = client.post(
         "/api/v1/strava/sync",
         json={

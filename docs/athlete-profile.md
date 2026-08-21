@@ -8,7 +8,9 @@ The calculation is deterministic, provider-neutral, and does not involve an LLM.
 Callers select an inclusive local calendar-date period and an IANA timezone. The
 period is converted to a half-open UTC timestamp range (`start <= timestamp <
 end`) using local midnights, including daylight-saving transitions. Only records
-whose timestamps fall in that range are considered.
+whose timestamps fall in that range are considered. Host-dependent timezone keys
+such as `localtime`, `posixrules`, and the `posix/` and `right/` namespaces are
+rejected so identical inputs have identical calendar boundaries across deployments.
 
 Activities are grouped by their normalized RouteMuse `ActivityKind`. The result
 contains one `ActivityKindSummary` for each represented supported kind; it does
