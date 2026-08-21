@@ -3,7 +3,11 @@ from itertools import permutations
 import pytest
 
 from app.domain.activities import ActivityKind
-from app.domain.athlete_profile import ActivityKindSummary
+from app.domain.athlete_profile import (
+    ActivityCapabilityRanges,
+    ActivityKindSummary,
+    RepresentativeRange,
+)
 from app.services.athlete_profile import calculate_dominant_activity
 
 
@@ -14,6 +18,20 @@ def _summary(
     count: int,
     distance: float,
 ) -> ActivityKindSummary:
+    distance_range = RepresentativeRange(
+        sample_size=count,
+        p25=distance / count,
+        median=distance / count,
+        p75=distance / count,
+        p90=distance / count,
+    )
+    moving_time_range = RepresentativeRange(
+        sample_size=count,
+        p25=moving_time / count,
+        median=moving_time / count,
+        p75=moving_time / count,
+        p90=moving_time / count,
+    )
     return ActivityKindSummary(
         activity_kind=activity_kind,
         activity_count=count,
@@ -25,6 +43,10 @@ def _summary(
         median_distance_meters=distance / count,
         median_moving_time_seconds=moving_time / count,
         median_elevation_gain_meters=None,
+        capability_ranges=ActivityCapabilityRanges(
+            distance_meters=distance_range,
+            moving_time_seconds=moving_time_range,
+        ),
     )
 
 

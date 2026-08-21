@@ -15,6 +15,27 @@ class ActivityAnalysisRecord(BaseModel):
     elevation_gain_meters: float | None = Field(default=None, ge=0)
 
 
+class RepresentativeRange(BaseModel):
+    """Percentile distribution for one metric with its valid sample count."""
+
+    sample_size: int = Field(ge=1)
+    p25: float
+    median: float
+    p75: float
+    p90: float
+
+
+class ActivityCapabilityRanges(BaseModel):
+    """Typed representative per-activity ranges for one activity kind."""
+
+    distance_meters: RepresentativeRange
+    moving_time_seconds: RepresentativeRange
+    elevation_gain_meters: RepresentativeRange | None = None
+    elevation_gain_meters_per_km: RepresentativeRange | None = None
+    pace_seconds_per_km: RepresentativeRange | None = None
+    average_moving_speed_meters_per_second: RepresentativeRange | None = None
+
+
 class ActivityKindSummary(BaseModel):
     """Deterministic aggregates for one represented RouteMuse activity kind."""
 
@@ -28,6 +49,7 @@ class ActivityKindSummary(BaseModel):
     median_distance_meters: float = Field(ge=0)
     median_moving_time_seconds: float = Field(ge=0)
     median_elevation_gain_meters: float | None = Field(default=None, ge=0)
+    capability_ranges: ActivityCapabilityRanges
 
 
 class DominantActivityResult(BaseModel):
