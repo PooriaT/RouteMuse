@@ -1,6 +1,5 @@
 from dataclasses import dataclass
-from datetime import UTC, date, datetime, time, timedelta
-from zoneinfo import ZoneInfo
+from datetime import date, datetime
 
 from pydantic import BaseModel
 from sqlalchemy.exc import SQLAlchemyError
@@ -10,6 +9,7 @@ from app.db.repositories.strava import (
     StravaActivityUpsert,
     StravaSynchronizationRepository,
 )
+from app.domain.calendar import calendar_period_bounds
 from app.integrations.strava.client import StravaClient
 from app.integrations.strava.dtos import StravaActivityDTO
 from app.integrations.strava.errors import (
@@ -61,20 +61,14 @@ class StravaCalendarBounds:
 def strava_calendar_bounds(
     start_date: date, end_date: date, timezone: str
 ) -> StravaCalendarBounds:
-    zone = ZoneInfo(timezone)
-    local_start = datetime.combine(start_date, time.min, tzinfo=zone)
-    local_end_exclusive = datetime.combine(
-        end_date + timedelta(days=1), time.min, tzinfo=zone
-    )
-    start_at = local_start.astimezone(UTC)
-    end_at_exclusive = local_end_exclusive.astimezone(UTC)
+    bounds = calendar_period_bounds(start_date, end_date, timezone)
     return StravaCalendarBounds(
-        start_at=start_at,
-        end_at_exclusive=end_at_exclusive,
+        start_at=bounds.start_at,
+        end_at_exclusive=bounds.end_at_exclusive,
         # Strava's `after` boundary is exclusive. Subtracting one second keeps an
         # activity that starts exactly at the selected local midnight.
-        after_epoch=int(start_at.timestamp()) - 1,
-        before_epoch=int(end_at_exclusive.timestamp()),
+        after_epoch=int(bounds.start_at.timestamp()) - 1,
+        before_epoch=int(bounds.end_at_exclusive.timestamp()),
     )
 
 
