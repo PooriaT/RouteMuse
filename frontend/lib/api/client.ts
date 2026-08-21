@@ -1,5 +1,9 @@
 import type { ActivityType } from "@/types/activity";
 import type {
+  AthleteProfile,
+  AthleteProfileRequest,
+} from "@/types/athleteProfile";
+import type {
   StravaConnectionStatus,
   StravaSynchronizationRequest,
   StravaSynchronizationResult,
@@ -102,6 +106,11 @@ export const api = {
   syncStravaActivities: (body: StravaSynchronizationRequest) =>
     request<StravaSynchronizationResult, StravaSynchronizationRequest>(
       "/api/v1/strava/sync",
+      { method: "POST", body },
+    ),
+  athleteProfile: (body: AthleteProfileRequest) =>
+    request<AthleteProfile, AthleteProfileRequest>(
+      "/api/v1/athlete-profile",
       { method: "POST", body },
     ),
 };

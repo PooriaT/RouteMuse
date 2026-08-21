@@ -1,6 +1,6 @@
 # RouteMuse
 
-RouteMuse is a personalized outdoor route discovery and planning application. This repository establishes domain boundaries and a runnable planner shell. Its backend supports a secure Strava account connection and historical activity synchronization, while routing, scoring, and LLM features remain intentionally unimplemented.
+RouteMuse is a personalized outdoor route discovery and planning application. This repository establishes domain boundaries and a runnable planner shell. Its backend supports a secure Strava account connection, historical activity synchronization, and deterministic athlete-profile analysis, while routing, scoring, and LLM features remain intentionally unimplemented.
 
 ## Architecture
 
@@ -79,6 +79,42 @@ All three fields are required. `timezone` must be an IANA timezone; there is no 
 
 The request runs synchronously and returns page, fetch, insert, update, and unsupported-sport counts. Activities are committed one provider page at a time and upserted by the existing connection/activity uniqueness rule. An empty range is successful. If a later page fails, the controlled error includes a `partial` synchronization result while earlier pages remain committed. Authentication, timeouts, temporary provider failures, malformed responses, and rate limits have distinct safe error codes; rate-limit responses include usable `Retry-After` metadata when Strava supplies it.
 
+### Athlete profile
+
+Build the current connected athlete's deterministic profile from already-saved
+normalized activities with `POST /api/v1/athlete-profile`:
+
+```json
+{
+  "start_date": "2026-01-01",
+  "end_date": "2026-03-31",
+  "timezone": "America/Vancouver"
+}
+```
+
+The request uses the same inclusive calendar-period and IANA-timezone semantics
+as Strava synchronization. It does not contact Strava. RouteMuse loads persisted
+canonical activity facts for the current singleton connection, excludes
+unsupported normalized kinds from supported metrics, and calculates the profile
+on demand without a derived-data table.
+
+The typed response includes the selected period, analyzed and excluded counts,
+per-kind activity summaries, dominant activity with its moving-time share,
+representative capability ranges and sample sizes, and per-kind
+consistency/recency signals. A period with no supported activities is successful
+and returns `activities_analyzed: 0`, empty summary/signal lists, and
+`dominant_activity: null`. See [athlete profile metrics](docs/athlete-profile.md)
+for formulas, units, percentile semantics, and missing-data behavior.
+
+After RouteMuse confirms the saved Strava connection, the planner can display a
+profile for the selected period without requiring another import. A completed
+import refreshes the profile using the same period and timezone. A partial import
+keeps its synchronization warning and pauses the definitive profile view until a
+retry completes. That incomplete state is derived from persisted synchronization
+runs, so it survives page reloads and period changes. Planning controls remain
+disabled because profile presentation does not yet implement route selection or
+recommendation behavior.
+
 `.env.example` also documents secret-free placeholders for future Ollama and openrouteservice adapters. Those placeholders are not used yet, and Ollama is not launched or downloaded by the application.
 
 ## Commands
@@ -101,4 +137,4 @@ poetry run uvicorn app.main:app --reload
 
 ## Current limitations and next integrations
 
-This scaffold has no RouteMuse user authentication, route discovery/generation, athlete analysis, recommendation ranking, GPX, or Ollama inference. Planning controls are intentionally disabled and recommendations are empty. Strava OAuth credentials are connected and encrypted server-side; historical activities can be synchronized idempotently, and exact `sport_type` values are normalized at the integration boundary while unsupported values remain identifiable. Subsequent work can add athlete analysis, factual geospatial adapters, and deterministic candidate scoring before any LLM explanation layer.
+This scaffold has no RouteMuse user authentication, route discovery/generation, route difficulty scoring, recommendation ranking, GPX, or Ollama inference. Planning controls are intentionally disabled and recommendations are empty. Strava OAuth credentials are connected and encrypted server-side; historical activities can be synchronized idempotently, and exact `sport_type` values are normalized at the integration boundary while unsupported values remain identifiable. Deterministic athlete analysis is implemented and presented from persisted history. Subsequent work can add factual geospatial adapters and deterministic candidate scoring before any LLM explanation layer.

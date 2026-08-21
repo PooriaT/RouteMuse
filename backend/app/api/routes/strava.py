@@ -1,18 +1,18 @@
 import hmac
 import re
 import secrets
-from datetime import UTC, date, datetime
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Cookie, Depends, Query, Request, Response, status
 from fastapi.responses import JSONResponse, RedirectResponse
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field
 from sqlalchemy.exc import SQLAlchemyError
 
+from app.api.schemas.calendar import CalendarPeriodRequest
 from app.core.config import Settings, get_settings
 from app.db.repositories.strava import StravaConnectionRepository
 from app.db.security import TokenProtectionError
-from app.domain.calendar import resolve_iana_timezone
 from app.integrations.strava.client import REQUIRED_STRAVA_SCOPE, StravaOAuthClient
 from app.integrations.strava.dependencies import (
     get_strava_connection_repository,
@@ -56,24 +56,8 @@ class StravaConnectionStatusResponse(BaseModel):
     granted_scopes: list[str] = Field(default_factory=list)
 
 
-class StravaSynchronizationRequest(BaseModel):
-    start_date: date
-    end_date: date
-    timezone: str
-
-    @field_validator("timezone")
-    @classmethod
-    def validate_timezone(cls, value: str) -> str:
-        resolve_iana_timezone(value)
-        return value
-
-    @model_validator(mode="after")
-    def validate_date_order(self) -> "StravaSynchronizationRequest":
-        if self.start_date > self.end_date:
-            raise ValueError("start_date must be on or before end_date")
-        if self.end_date == date.max:
-            raise ValueError("end_date is outside the supported range")
-        return self
+class StravaSynchronizationRequest(CalendarPeriodRequest):
+    """Selected calendar period for provider synchronization."""
 
 
 def _secure_cookie(settings: Settings) -> bool:
