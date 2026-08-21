@@ -40,3 +40,31 @@ class StravaTokenRevocationFailed(StravaIntegrationError):
 
 class StravaAuthenticationInvalid(StravaIntegrationError):
     """The stored Strava authentication is absent or no longer valid."""
+
+
+class StravaRateLimited(StravaIntegrationError):
+    """Strava refused the request because the current rate limit was reached."""
+
+    def __init__(self, message: str, *, retry_after_seconds: int | None = None) -> None:
+        super().__init__(message)
+        self.retry_after_seconds = retry_after_seconds
+
+
+class StravaRequestTimedOut(StravaIntegrationError):
+    """The Strava activity request exceeded the configured timeout."""
+
+
+class StravaTemporarilyUnavailable(StravaIntegrationError):
+    """Strava returned a temporary server-side failure."""
+
+
+class StravaMalformedResponse(StravaIntegrationError):
+    """Strava returned activity data outside the integration contract."""
+
+
+class StravaNetworkError(StravaIntegrationError):
+    """An unexpected network failure prevented a Strava request."""
+
+
+class StravaSynchronizationPersistenceFailed(StravaIntegrationError):
+    """Synchronization progress could not be persisted safely."""

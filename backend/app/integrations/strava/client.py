@@ -2,16 +2,22 @@ from typing import Literal
 from urllib.parse import urlencode, urlparse
 
 import httpx
-from pydantic import ValidationError
+from pydantic import TypeAdapter, ValidationError
 
 from app.core.config import Settings
 from app.integrations.strava.dtos import (
+    StravaActivityDTO,
     StravaTokenExchangeDTO,
     StravaTokenRefreshDTO,
 )
 from app.integrations.strava.errors import (
     StravaAuthenticationInvalid,
     StravaConfigurationUnavailable,
+    StravaMalformedResponse,
+    StravaNetworkError,
+    StravaRateLimited,
+    StravaRequestTimedOut,
+    StravaTemporarilyUnavailable,
     StravaTokenExchangeFailed,
     StravaTokenRefreshFailed,
     StravaTokenRevocationFailed,
@@ -20,7 +26,10 @@ from app.integrations.strava.errors import (
 STRAVA_AUTHORIZE_URL = "https://www.strava.com/oauth/authorize"
 STRAVA_TOKEN_URL = "https://www.strava.com/oauth/token"
 STRAVA_REVOKE_URL = "https://www.strava.com/oauth/revoke"
+STRAVA_ACTIVITIES_URL = "https://www.strava.com/api/v3/athlete/activities"
 REQUIRED_STRAVA_SCOPE = "activity:read_all"
+
+_ACTIVITY_LIST_ADAPTER = TypeAdapter(list[StravaActivityDTO])
 
 
 class StravaOAuthClient:
@@ -81,9 +90,14 @@ class StravaOAuthClient:
                 raise StravaAuthenticationInvalid(
                     "Stored Strava authentication is no longer valid."
                 )
+            if response.status_code == httpx.codes.TOO_MANY_REQUESTS:
+                raise StravaRateLimited(
+                    "Strava token refresh is rate limited.",
+                    retry_after_seconds=_retry_after_seconds(response),
+                )
             response.raise_for_status()
             return StravaTokenRefreshDTO.model_validate(response.json())
-        except StravaAuthenticationInvalid:
+        except (StravaAuthenticationInvalid, StravaRateLimited):
             raise
         except (httpx.HTTPError, ValueError, ValidationError) as exc:
             raise StravaTokenRefreshFailed(
@@ -137,3 +151,75 @@ class StravaOAuthClient:
             return await self._http_client.post(url, **kwargs)
         async with httpx.AsyncClient(timeout=10.0) as client:
             return await client.post(url, **kwargs)
+
+
+class StravaClient:
+    """Low-level authenticated Strava activity API client."""
+
+    def __init__(self, http_client: httpx.AsyncClient | None = None) -> None:
+        self._http_client = http_client
+
+    async def list_activities_page(
+        self,
+        access_token: str,
+        *,
+        after: int,
+        before: int,
+        page: int,
+        per_page: int,
+    ) -> list[StravaActivityDTO]:
+        try:
+            response = await self._get(
+                STRAVA_ACTIVITIES_URL,
+                headers={"Authorization": f"Bearer {access_token}"},
+                params={
+                    "after": after,
+                    "before": before,
+                    "page": page,
+                    "per_page": per_page,
+                },
+            )
+        except httpx.TimeoutException as exc:
+            raise StravaRequestTimedOut(
+                "The Strava activity request timed out."
+            ) from exc
+        except httpx.RequestError as exc:
+            raise StravaNetworkError("The Strava activity request failed.") from exc
+
+        if response.status_code in {httpx.codes.UNAUTHORIZED, httpx.codes.FORBIDDEN}:
+            raise StravaAuthenticationInvalid(
+                "The Strava access token is no longer valid."
+            )
+        if response.status_code == httpx.codes.TOO_MANY_REQUESTS:
+            raise StravaRateLimited(
+                "Strava activity synchronization is rate limited.",
+                retry_after_seconds=_retry_after_seconds(response),
+            )
+        if response.status_code >= httpx.codes.INTERNAL_SERVER_ERROR:
+            raise StravaTemporarilyUnavailable(
+                "Strava activity synchronization is temporarily unavailable."
+            )
+        try:
+            response.raise_for_status()
+            return _ACTIVITY_LIST_ADAPTER.validate_python(response.json())
+        except (httpx.HTTPStatusError, ValueError, ValidationError) as exc:
+            raise StravaMalformedResponse(
+                "Strava returned an unsupported activity response."
+            ) from exc
+
+    async def _get(self, url: str, **kwargs: object) -> httpx.Response:
+        if self._http_client is not None:
+            return await self._http_client.get(url, **kwargs)
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            return await client.get(url, **kwargs)
+
+
+def _retry_after_seconds(response: httpx.Response) -> int | None:
+    value = response.headers.get("Retry-After")
+    if value is None:
+        return None
+    try:
+        seconds = int(value)
+    except ValueError:
+        return None
+    return seconds if seconds >= 0 else None

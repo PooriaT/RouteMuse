@@ -23,6 +23,14 @@ class StravaTokenService:
         self._oauth_client = oauth_client
 
     async def usable_access_token(self) -> str:
+        return await self._access_token(force_refresh=False)
+
+    async def refresh_access_token(self) -> str:
+        """Refresh through the centralized lifecycle after a provider 401."""
+
+        return await self._access_token(force_refresh=True)
+
+    async def _access_token(self, *, force_refresh: bool) -> str:
         try:
             connection = self._repository.get_current(for_update=True)
         except TokenProtectionError as exc:
@@ -35,7 +43,10 @@ class StravaTokenService:
             raise StravaAuthenticationInvalid("No Strava connection is available.")
 
         now = datetime.now(UTC)
-        if connection.access_token_expires_at > now + TOKEN_REFRESH_WINDOW:
+        if (
+            not force_refresh
+            and connection.access_token_expires_at > now + TOKEN_REFRESH_WINDOW
+        ):
             access_token = connection.access_token
             self._repository.commit()
             return access_token
