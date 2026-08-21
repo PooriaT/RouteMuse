@@ -24,3 +24,23 @@ def test_strava_token_encryption_key_is_optional_but_secret(monkeypatch) -> None
         "configured-secret-key"
     )
     assert "configured-secret-key" not in repr(settings)
+
+
+def test_strava_oauth_settings_are_optional_and_client_secret_is_protected(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("STRAVA_CLIENT_ID", "12345")
+    monkeypatch.setenv("STRAVA_CLIENT_SECRET", "oauth-client-secret")
+    monkeypatch.setenv(
+        "STRAVA_REDIRECT_URI", "http://localhost:8000/api/v1/strava/callback"
+    )
+
+    settings = Settings(_env_file=None)
+
+    assert settings.strava_client_id == "12345"
+    assert settings.strava_client_secret is not None
+    assert settings.strava_client_secret.get_secret_value() == "oauth-client-secret"
+    assert settings.strava_redirect_uri == (
+        "http://localhost:8000/api/v1/strava/callback"
+    )
+    assert "oauth-client-secret" not in repr(settings)

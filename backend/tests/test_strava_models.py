@@ -1,4 +1,4 @@
-from sqlalchemy import BigInteger, DateTime, UniqueConstraint
+from sqlalchemy import BigInteger, CheckConstraint, DateTime, UniqueConstraint
 
 from app.db.base import Base
 from app.db.models import (
@@ -40,7 +40,13 @@ def test_provider_identity_constraints_and_types_support_large_ids() -> None:
     }
 
     assert ("strava_athlete_id",) in connection_unique_columns
+    assert ("singleton_slot",) in connection_unique_columns
     assert ("connection_id", "strava_activity_id") in activity_unique_columns
+    assert any(
+        constraint.name == "ck_strava_connections_singleton"
+        for constraint in connection_table.constraints
+        if isinstance(constraint, CheckConstraint)
+    )
 
 
 def test_activity_retains_provider_sport_and_allows_unknown_normalization() -> None:

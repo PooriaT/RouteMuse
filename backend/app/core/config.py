@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     cors_origins: Annotated[list[str], NoDecode] = Field(
         default_factory=lambda: ["http://localhost:3000"]
     )
+    strava_client_id: str | None = None
+    strava_client_secret: SecretStr | None = None
+    strava_redirect_uri: str | None = None
     strava_token_encryption_key: SecretStr | None = None
 
     @field_validator("cors_origins", mode="before")

@@ -26,6 +26,8 @@ def test_alembic_environment_loads_without_database_connection() -> None:
     assert "CREATE TABLE strava_activities" in result.stdout
     assert "CREATE TABLE strava_synchronization_runs" in result.stdout
     assert "uq_strava_activities_connection_activity" in result.stdout
+    assert "DELETE FROM strava_connections" in result.stdout
+    assert "uq_strava_connections_singleton" in result.stdout
 
 
 def test_revision_chain_and_safe_postgis_downgrade() -> None:
@@ -43,6 +45,15 @@ def test_strava_persistence_revision_is_importable_and_chained() -> None:
 
     assert revision.revision == "0002"
     assert revision.down_revision == "0001"
+
+
+def test_single_connection_revision_is_importable_and_chained() -> None:
+    revision = importlib.import_module(
+        "migrations.versions.0003_enforce_single_strava_connection"
+    )
+
+    assert revision.revision == "0003"
+    assert revision.down_revision == "0002"
 
 
 def test_alembic_configuration_defers_database_url_to_application_settings() -> None:
