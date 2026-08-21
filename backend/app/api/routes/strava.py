@@ -1,12 +1,13 @@
 import hmac
 import re
 import secrets
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Annotated
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError, available_timezones
 
 from fastapi import APIRouter, Cookie, Depends, Query, Request, Response, status
 from fastapi.responses import JSONResponse, RedirectResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.config import Settings, get_settings
@@ -16,6 +17,7 @@ from app.integrations.strava.client import REQUIRED_STRAVA_SCOPE, StravaOAuthCli
 from app.integrations.strava.dependencies import (
     get_strava_connection_repository,
     get_strava_oauth_client,
+    get_strava_synchronization_service,
 )
 from app.integrations.strava.errors import (
     StravaAuthenticationInvalid,
@@ -24,16 +26,28 @@ from app.integrations.strava.errors import (
     StravaConfigurationUnavailable,
     StravaInsufficientScope,
     StravaIntegrationError,
+    StravaMalformedResponse,
+    StravaNetworkError,
     StravaOAuthStateInvalid,
     StravaPersistenceFailed,
+    StravaRateLimited,
+    StravaRequestTimedOut,
+    StravaSynchronizationPersistenceFailed,
+    StravaTemporarilyUnavailable,
     StravaTokenExchangeFailed,
     StravaTokenRefreshFailed,
     StravaTokenRevocationFailed,
+)
+from app.integrations.strava.synchronization import (
+    StravaSynchronizationFailed,
+    StravaSynchronizationResult,
+    StravaSynchronizationService,
 )
 
 STRAVA_STATE_COOKIE = "routemuse_strava_oauth_state"
 STRAVA_STATE_MAX_AGE_SECONDS = 600
 STRAVA_CALLBACK_PATH = "/api/v1/strava/callback"
+_IANA_TIMEZONES = frozenset(available_timezones())
 
 router = APIRouter(prefix="/strava", tags=["strava"])
 
@@ -42,6 +56,31 @@ class StravaConnectionStatusResponse(BaseModel):
     connected: bool
     athlete_id: str | None = None
     granted_scopes: list[str] = Field(default_factory=list)
+
+
+class StravaSynchronizationRequest(BaseModel):
+    start_date: date
+    end_date: date
+    timezone: str
+
+    @field_validator("timezone")
+    @classmethod
+    def validate_timezone(cls, value: str) -> str:
+        if value not in _IANA_TIMEZONES:
+            raise ValueError("timezone must be a valid IANA timezone")
+        try:
+            ZoneInfo(value)
+        except (ZoneInfoNotFoundError, ValueError) as exc:
+            raise ValueError("timezone must be a valid IANA timezone") from exc
+        return value
+
+    @model_validator(mode="after")
+    def validate_date_order(self) -> "StravaSynchronizationRequest":
+        if self.start_date > self.end_date:
+            raise ValueError("start_date must be on or before end_date")
+        if self.end_date == date.max:
+            raise ValueError("end_date is outside the supported range")
+        return self
 
 
 def _secure_cookie(settings: Settings) -> bool:
@@ -215,6 +254,21 @@ async def disconnect_strava(
     return StravaConnectionStatusResponse(connected=False)
 
 
+@router.post("/sync", response_model=StravaSynchronizationResult)
+async def synchronize_strava_activities(
+    request: StravaSynchronizationRequest,
+    service: Annotated[
+        StravaSynchronizationService,
+        Depends(get_strava_synchronization_service),
+    ],
+) -> StravaSynchronizationResult:
+    return await service.synchronize(
+        start_date=request.start_date,
+        end_date=request.end_date,
+        timezone=request.timezone,
+    )
+
+
 _ERROR_RESPONSES: tuple[
     tuple[type[StravaIntegrationError], int, str, str], ...
 ] = (
@@ -278,21 +332,71 @@ _ERROR_RESPONSES: tuple[
         "strava_authentication_invalid",
         "The Strava connection is no longer authenticated.",
     ),
+    (
+        StravaRateLimited,
+        status.HTTP_429_TOO_MANY_REQUESTS,
+        "strava_rate_limited",
+        "Strava rate limits are temporarily preventing synchronization.",
+    ),
+    (
+        StravaRequestTimedOut,
+        status.HTTP_504_GATEWAY_TIMEOUT,
+        "strava_request_timed_out",
+        "The Strava activity request timed out.",
+    ),
+    (
+        StravaTemporarilyUnavailable,
+        status.HTTP_503_SERVICE_UNAVAILABLE,
+        "strava_temporarily_unavailable",
+        "Strava is temporarily unavailable.",
+    ),
+    (
+        StravaMalformedResponse,
+        status.HTTP_502_BAD_GATEWAY,
+        "strava_malformed_response",
+        "Strava returned an unsupported activity response.",
+    ),
+    (
+        StravaNetworkError,
+        status.HTTP_502_BAD_GATEWAY,
+        "strava_network_error",
+        "The Strava activity request could not be completed.",
+    ),
+    (
+        StravaSynchronizationPersistenceFailed,
+        status.HTTP_503_SERVICE_UNAVAILABLE,
+        "strava_synchronization_persistence_failed",
+        "Strava synchronization progress could not be persisted.",
+    ),
 )
 
 
 async def strava_exception_handler(
     request: Request, exc: StravaIntegrationError
 ) -> JSONResponse:
+    synchronization_result: StravaSynchronizationResult | None = None
+    if isinstance(exc, StravaSynchronizationFailed):
+        synchronization_result = exc.result
+        exc = exc.cause
     for exception_type, status_code, code, message in _ERROR_RESPONSES:
         if isinstance(exc, exception_type):
+            detail: dict[str, object] = {"code": code, "message": message}
+            headers = {
+                "Cache-Control": "no-store",
+                "Referrer-Policy": "no-referrer",
+            }
+            if synchronization_result is not None:
+                detail["synchronization"] = synchronization_result.model_dump(
+                    mode="json"
+                )
+            if isinstance(exc, StravaRateLimited):
+                detail["retry_after_seconds"] = exc.retry_after_seconds
+                if exc.retry_after_seconds is not None:
+                    headers["Retry-After"] = str(exc.retry_after_seconds)
             response = JSONResponse(
                 status_code=status_code,
-                content={"detail": {"code": code, "message": message}},
-                headers={
-                    "Cache-Control": "no-store",
-                    "Referrer-Policy": "no-referrer",
-                },
+                content={"detail": detail},
+                headers=headers,
             )
             if request.url.path == STRAVA_CALLBACK_PATH:
                 _clear_state_cookie(response, request.app.state.settings)

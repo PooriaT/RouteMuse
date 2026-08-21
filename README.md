@@ -1,6 +1,6 @@
 # RouteMuse
 
-RouteMuse is a personalized outdoor route discovery and planning application. This repository establishes domain boundaries and a runnable planner shell. Its backend supports a secure Strava account connection, while activity synchronization, routing, scoring, and LLM features remain intentionally unimplemented.
+RouteMuse is a personalized outdoor route discovery and planning application. This repository establishes domain boundaries and a runnable planner shell. Its backend supports a secure Strava account connection and historical activity synchronization, while routing, scoring, and LLM features remain intentionally unimplemented.
 
 ## Architecture
 
@@ -55,6 +55,22 @@ To configure Strava, create an API application in Strava's developer settings an
 
 Strava configuration is validated only when a Strava endpoint is invoked, so an unconfigured provider does not prevent `/health` from starting. Begin authorization by navigating the browser to `GET /api/v1/strava/connect`. Connection state is available from `GET /api/v1/strava/status`, and `POST /api/v1/strava/disconnect` revokes the provider credential before deleting it locally.
 
+### Strava activity synchronization
+
+Synchronize one inclusive calendar-date range with `POST /api/v1/strava/sync`:
+
+```json
+{
+  "start_date": "2026-08-01",
+  "end_date": "2026-08-31",
+  "timezone": "America/Vancouver"
+}
+```
+
+All three fields are required. `timezone` must be an IANA timezone; there is no server-timezone fallback. RouteMuse interprets the start as local midnight and the end as inclusive through that local calendar day. It queries Strava using the corresponding UTC lower bound and the exclusive next-local-midnight upper bound, so daylight-saving transitions are preserved.
+
+The request runs synchronously and returns page, fetch, insert, update, and unsupported-sport counts. Activities are committed one provider page at a time and upserted by the existing connection/activity uniqueness rule. An empty range is successful. If a later page fails, the controlled error includes a `partial` synchronization result while earlier pages remain committed. Authentication, timeouts, temporary provider failures, malformed responses, and rate limits have distinct safe error codes; rate-limit responses include usable `Retry-After` metadata when Strava supplies it.
+
 `.env.example` also documents secret-free placeholders for future Ollama and openrouteservice adapters. Those placeholders are not used yet, and Ollama is not launched or downloaded by the application.
 
 ## Commands
@@ -68,4 +84,4 @@ Strava configuration is validated only when a Strava endpoint is invoked, so an 
 
 ## Current limitations and next integrations
 
-This scaffold has no RouteMuse user authentication, Strava activity import, route discovery/generation, athlete analysis, recommendation ranking, GPX, or Ollama inference. Planning controls are intentionally disabled and recommendations are empty. Strava OAuth credentials are connected and encrypted server-side, and exact `sport_type` values can be normalized at the integration boundary, but no activity synchronization occurs yet. Subsequent work can connect that normalization boundary to activity synchronization, then add factual geospatial adapters and deterministic candidate scoring before any LLM explanation layer.
+This scaffold has no RouteMuse user authentication, route discovery/generation, athlete analysis, recommendation ranking, GPX, or Ollama inference. Planning controls are intentionally disabled and recommendations are empty. Strava OAuth credentials are connected and encrypted server-side; historical activities can be synchronized idempotently, and exact `sport_type` values are normalized at the integration boundary while unsupported values remain identifiable. Subsequent work can add athlete analysis, factual geospatial adapters, and deterministic candidate scoring before any LLM explanation layer.

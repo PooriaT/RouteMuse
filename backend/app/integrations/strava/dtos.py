@@ -1,6 +1,6 @@
-from datetime import datetime
+from datetime import UTC, datetime
 
-from pydantic import BaseModel, ConfigDict, Field, SecretStr
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
 
 
 class StravaAthleteDTO(BaseModel):
@@ -31,9 +31,16 @@ class StravaActivityDTO(BaseModel):
 
     model_config = ConfigDict(extra="ignore")
 
-    id: int
-    sport_type: str
+    id: int = Field(gt=0)
+    sport_type: str = Field(min_length=1, max_length=64)
     start_date: datetime
     moving_time: int = Field(ge=0)
     distance: float = Field(ge=0)
     total_elevation_gain: float = Field(ge=0)
+
+    @field_validator("start_date")
+    @classmethod
+    def require_aware_start_date(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("start_date must include a timezone offset")
+        return value.astimezone(UTC)

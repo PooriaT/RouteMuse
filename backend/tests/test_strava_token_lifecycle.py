@@ -104,6 +104,27 @@ def test_near_expiry_or_expired_token_is_refreshed_and_rotation_is_persisted(
     assert repository.commits == 1
 
 
+def test_provider_unauthorized_can_force_refresh_through_lifecycle_service() -> None:
+    connection = _connection(datetime.now(UTC) + timedelta(hours=6))
+    refreshed_expiry = int((datetime.now(UTC) + timedelta(hours=8)).timestamp())
+    repository = FakeLifecycleRepository(connection)
+    oauth_client = FakeRefreshClient(
+        StravaTokenRefreshDTO(
+            access_token=SecretStr("forced-access"),
+            refresh_token=SecretStr("forced-rotated-refresh"),
+            expires_at=refreshed_expiry,
+        )
+    )
+    service = StravaTokenService(repository, oauth_client)  # type: ignore[arg-type]
+
+    token = asyncio.run(service.refresh_access_token())
+
+    assert token == "forced-access"
+    assert oauth_client.refresh_calls == ["current-refresh"]
+    assert connection.refresh_token == "forced-rotated-refresh"
+    assert repository.commits == 1
+
+
 def test_failed_refresh_rolls_back_without_changing_tokens() -> None:
     connection = _connection(datetime.now(UTC) - timedelta(seconds=1))
     repository = FakeLifecycleRepository(connection)
