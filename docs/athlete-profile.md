@@ -69,8 +69,14 @@ percentile functions, or their defaults.
 The percentiles have the following statistical interpretation:
 
 - `median` is the athlete's typical historical per-activity effort.
-- `p75` is comfortably above the athlete's typical historical effort.
-- `p90` is a strong historical effort, not an absolute maximum.
+- For metrics where a higher value represents more capability, such as
+  distance, duration, elevation gain, climbing density, and moving speed,
+  `p75` is comfortably above typical and `p90` is a strong historical
+  upper-range effort, not an absolute maximum.
+- `pace_seconds_per_km` has the opposite direction: fewer seconds per kilometer
+  means a faster pace. Its `p25` is faster than the median, while `p75` and
+  `p90` are progressively slower historical paces and must not be interpreted
+  as stronger capability.
 
 The ranges describe history only. In particular, `p90` is neither a safety
 guarantee nor a route recommendation target. A maximum is not exposed as the
