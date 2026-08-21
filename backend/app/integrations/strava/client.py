@@ -90,9 +90,14 @@ class StravaOAuthClient:
                 raise StravaAuthenticationInvalid(
                     "Stored Strava authentication is no longer valid."
                 )
+            if response.status_code == httpx.codes.TOO_MANY_REQUESTS:
+                raise StravaRateLimited(
+                    "Strava token refresh is rate limited.",
+                    retry_after_seconds=_retry_after_seconds(response),
+                )
             response.raise_for_status()
             return StravaTokenRefreshDTO.model_validate(response.json())
-        except StravaAuthenticationInvalid:
+        except (StravaAuthenticationInvalid, StravaRateLimited):
             raise
         except (httpx.HTTPError, ValueError, ValidationError) as exc:
             raise StravaTokenRefreshFailed(

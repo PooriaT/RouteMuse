@@ -48,6 +48,7 @@ STRAVA_STATE_COOKIE = "routemuse_strava_oauth_state"
 STRAVA_STATE_MAX_AGE_SECONDS = 600
 STRAVA_CALLBACK_PATH = "/api/v1/strava/callback"
 _IANA_TIMEZONES = frozenset(available_timezones())
+_SYSTEM_DEPENDENT_TIMEZONE_KEYS = frozenset({"localtime", "posixrules"})
 
 router = APIRouter(prefix="/strava", tags=["strava"])
 
@@ -66,7 +67,11 @@ class StravaSynchronizationRequest(BaseModel):
     @field_validator("timezone")
     @classmethod
     def validate_timezone(cls, value: str) -> str:
-        if value not in _IANA_TIMEZONES:
+        if (
+            value not in _IANA_TIMEZONES
+            or value in _SYSTEM_DEPENDENT_TIMEZONE_KEYS
+            or value.startswith(("posix/", "right/"))
+        ):
             raise ValueError("timezone must be a valid IANA timezone")
         try:
             ZoneInfo(value)

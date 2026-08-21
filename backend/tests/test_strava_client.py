@@ -6,7 +6,10 @@ import pytest
 
 from app.core.config import Settings
 from app.integrations.strava.client import StravaOAuthClient
-from app.integrations.strava.errors import StravaAuthenticationInvalid
+from app.integrations.strava.errors import (
+    StravaAuthenticationInvalid,
+    StravaRateLimited,
+)
 
 
 def _settings() -> Settings:
@@ -58,3 +61,18 @@ def test_refresh_unauthorized_is_a_controlled_authentication_failure() -> None:
         asyncio.run(client.refresh_token("invalid-refresh-secret"))
 
     assert "invalid-refresh-secret" not in str(error.value)
+
+
+def test_refresh_rate_limit_preserves_retry_metadata_without_token_leakage() -> None:
+    http_client = httpx.AsyncClient(
+        transport=httpx.MockTransport(
+            lambda _: httpx.Response(429, headers={"Retry-After": "75"})
+        )
+    )
+    client = StravaOAuthClient(_settings(), http_client=http_client)
+
+    with pytest.raises(StravaRateLimited) as error:
+        asyncio.run(client.refresh_token("rate-limited-refresh-secret"))
+
+    assert error.value.retry_after_seconds == 75
+    assert "rate-limited-refresh-secret" not in str(error.value)

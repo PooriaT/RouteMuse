@@ -397,6 +397,22 @@ def test_initial_token_refresh_failure_marks_run_failed() -> None:
     assert error.value.result.pages_fetched == 0
 
 
+def test_initial_token_refresh_rate_limit_is_preserved_for_api_translation() -> None:
+    repository = InMemorySynchronizationRepository()
+    rate_limit = StravaRateLimited(
+        "safe token refresh rate limit", retry_after_seconds=45
+    )
+    token_service = FakeTokenService(usable_error=rate_limit)
+
+    with pytest.raises(StravaSynchronizationFailed) as error:
+        _synchronize(_service(repository, FakeStravaClient({}), token_service))
+
+    assert error.value.cause is rate_limit
+    assert error.value.result.status is SynchronizationStatus.FAILED
+    assert error.value.result.pages_fetched == 0
+    assert repository.runs[0].error_summary == "strava_rate_limited"
+
+
 @pytest.mark.parametrize(
     "provider_error",
     [
