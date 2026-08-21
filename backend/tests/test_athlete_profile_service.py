@@ -119,6 +119,9 @@ def test_mixed_activity_kinds_are_summarized_independently() -> None:
     assert summaries[ActivityKind.HIKING].activity_count == 1
     assert summaries[ActivityKind.HIKING].median_distance_meters == 8_000.0
     assert summaries[ActivityKind.RUNNING].total_distance_meters == 5_000.0
+    assert profile.dominant_activity is not None
+    assert profile.dominant_activity.activity_kind is ActivityKind.ROAD_CYCLING
+    assert profile.dominant_activity.moving_time_share == 0.5
 
 
 def test_zero_activities_returns_an_empty_typed_profile() -> None:
@@ -127,6 +130,7 @@ def test_zero_activities_returns_an_empty_typed_profile() -> None:
     assert profile.activities_analyzed == 0
     assert profile.unsupported_activities_excluded == 0
     assert profile.activity_summaries == []
+    assert profile.dominant_activity is None
 
 
 def test_one_activity_uses_its_values_as_medians() -> None:
@@ -279,6 +283,9 @@ def test_unsupported_activities_are_counted_but_never_summarized() -> None:
     assert profile.activities_analyzed == 1
     assert profile.unsupported_activities_excluded == 1
     assert profile.activity_summaries[0].total_distance_meters == 5_000.0
+    assert profile.dominant_activity is not None
+    assert profile.dominant_activity.activity_kind is ActivityKind.RUNNING
+    assert profile.dominant_activity.moving_time_share == 1.0
 
 
 def test_period_with_only_unsupported_activities_is_safe() -> None:
@@ -287,6 +294,7 @@ def test_period_with_only_unsupported_activities_is_safe() -> None:
     assert profile.activities_analyzed == 0
     assert profile.unsupported_activities_excluded == 1
     assert profile.activity_summaries == []
+    assert profile.dominant_activity is None
 
 
 def test_activities_outside_selected_local_period_are_excluded() -> None:

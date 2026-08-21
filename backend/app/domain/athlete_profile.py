@@ -30,6 +30,16 @@ class ActivityKindSummary(BaseModel):
     median_elevation_gain_meters: float | None = Field(default=None, ge=0)
 
 
+class DominantActivityResult(BaseModel):
+    """The selected activity kind and the facts supporting that selection."""
+
+    activity_kind: ActivityKind
+    total_moving_time_seconds: int = Field(ge=0)
+    activity_count: int = Field(ge=1)
+    total_distance_meters: float = Field(ge=0)
+    moving_time_share: float = Field(ge=0, le=1)
+
+
 class AthleteProfile(BaseModel):
     period_start: date
     period_end: date
@@ -37,3 +47,4 @@ class AthleteProfile(BaseModel):
     activities_analyzed: int = Field(default=0, ge=0)
     unsupported_activities_excluded: int = Field(default=0, ge=0)
     activity_summaries: list[ActivityKindSummary] = Field(default_factory=list)
+    dominant_activity: DominantActivityResult | None = None
