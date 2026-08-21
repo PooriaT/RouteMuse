@@ -21,7 +21,7 @@ RouteMuse owns the vocabulary used by the rest of the application: `ActivityKind
 
 ## Integration boundaries
 
-**Strava.** Strava is an external activity-data provider, not the owner of RouteMuse's taxonomy. A Strava adapter must translate its DTOs into RouteMuse activities at the integration boundary; provider-specific fields must not leak into domain or application logic.
+**Strava.** Strava is an external activity-data provider, not the owner of RouteMuse's taxonomy. The OAuth HTTP client and provider DTOs stay inside `backend/app/integrations/strava/`. The API initiates authorization, validates a short-lived HttpOnly state cookie, checks the actually granted `activity:read_all` scope, exchanges codes server-side, and exposes only token-free status. A centralized lifecycle service obtains usable access tokens and persists refresh-token rotation under a database row lock. Activity synchronization remains a separate integration concern; its adapter must translate provider DTOs into RouteMuse activities at the boundary so provider-specific fields do not leak into domain or application logic.
 
 **Geospatial and routing providers.** External systems own factual trail and route information. Adapters normalize their geometry, coordinates, distance, elevation, surface, access, safety, and attribution facts into RouteMuse `RouteCandidate` models. Their implementations depend on small contracts, such as the protocols in `backend/app/integrations/contracts.py`, so a provider can be replaced without rewriting the domain.
 
@@ -35,7 +35,7 @@ Athlete capability, consistency, representative efforts, and other deterministic
 
 SQLAlchemy models, sessions, and repositories belong in the persistence layer outside the domain model. Domain concepts must remain usable in unit tests without a database and must not inherit from SQLAlchemy types. PostgreSQL/PostGIS stores application and geospatial data; Alembic owns schema evolution.
 
-Strava persistence stores one connection per provider athlete, imported activity facts in canonical meters and seconds, and durable synchronization-run metadata. Provider activity IDs are unique within a connection so repeated synchronization is idempotent. The original Strava `sport_type` is retained even when no RouteMuse activity kind is supported; the normalized kind is nullable in that case. OAuth tokens are Fernet-encrypted before being bound to database columns, using the environment-provided `STRAVA_TOKEN_ENCRYPTION_KEY`; authorization codes and full provider payloads are not stored.
+Strava persistence stores one connection per provider athlete, imported activity facts in canonical meters and seconds, and durable synchronization-run metadata. Provider activity IDs are unique within a connection so repeated synchronization is idempotent. The original Strava `sport_type` is retained even when no RouteMuse activity kind is supported; the normalized kind is nullable in that case. OAuth tokens are Fernet-encrypted before being bound to database columns, using the environment-provided `STRAVA_TOKEN_ENCRYPTION_KEY`; authorization codes and full provider payloads are not stored. Disconnect uses Strava's recommended revocation endpoint and removes local credentials only after the provider confirms revocation. Callback query strings are redacted from the application server's access-log scope so authorization codes are not logged.
 
 ## Architectural rules
 
@@ -48,4 +48,4 @@ Strava persistence stores one connection per provider athlete, imported activity
 7. Persistence concerns remain outside RouteMuse domain models.
 8. External implementations remain replaceable through small provider contracts.
 
-The scaffold deliberately contains no live adapters, analytics, scoring, or LLM calls.
+The application deliberately contains no activity synchronization, analytics, scoring, or LLM calls. The live Strava integration is limited to OAuth connection and token lifecycle behavior.
