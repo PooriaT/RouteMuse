@@ -10,6 +10,7 @@ from app.domain.athlete_profile import (
     ActivityAnalysisRecord,
     ActivityKindSummary,
     AthleteProfile,
+    DominantActivityResult,
 )
 from app.domain.calendar import calendar_period_bounds
 
@@ -49,6 +50,46 @@ def calculate_activity_summaries(
         activities_analyzed=sum(summary.activity_count for summary in summaries),
         unsupported_activities_excluded=unsupported_count,
         activity_summaries=summaries,
+        dominant_activity=calculate_dominant_activity(summaries),
+    )
+
+
+def calculate_dominant_activity(
+    summaries: Iterable[ActivityKindSummary],
+) -> DominantActivityResult | None:
+    """Select the dominant kind from already-calculated supported summaries."""
+
+    represented_summaries = list(summaries)
+    if not represented_summaries:
+        return None
+
+    # Product ranking: moving time, then count, then distance, all descending.
+    # ActivityKind.value ascending is only a stable technical fallback when every
+    # product metric ties; it is not an additional product signal.
+    dominant = min(
+        represented_summaries,
+        key=lambda summary: (
+            -summary.total_moving_time_seconds,
+            -summary.activity_count,
+            -summary.total_distance_meters,
+            summary.activity_kind.value,
+        ),
+    )
+    total_moving_time_seconds = sum(
+        summary.total_moving_time_seconds for summary in represented_summaries
+    )
+    moving_time_share = (
+        dominant.total_moving_time_seconds / total_moving_time_seconds
+        if total_moving_time_seconds
+        else 0.0
+    )
+
+    return DominantActivityResult(
+        activity_kind=dominant.activity_kind,
+        total_moving_time_seconds=dominant.total_moving_time_seconds,
+        activity_count=dominant.activity_count,
+        total_distance_meters=dominant.total_distance_meters,
+        moving_time_share=moving_time_share,
     )
 
 
