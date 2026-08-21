@@ -1,18 +1,71 @@
 from collections import defaultdict
 from collections.abc import Iterable
 from datetime import date, timedelta
-from math import fsum
-from statistics import median
+from math import floor, fsum
 from zoneinfo import ZoneInfo
 
 from app.domain.activities import ActivityKind
 from app.domain.athlete_profile import (
     ActivityAnalysisRecord,
+    ActivityCapabilityRanges,
     ActivityKindSummary,
     AthleteProfile,
     DominantActivityResult,
+    RepresentativeRange,
 )
 from app.domain.calendar import calendar_period_bounds
+
+_PACE_ACTIVITY_KINDS = frozenset(
+    {
+        ActivityKind.WALKING,
+        ActivityKind.RUNNING,
+        ActivityKind.TRAIL_RUNNING,
+        ActivityKind.HIKING,
+    }
+)
+_SPEED_ACTIVITY_KINDS = frozenset(
+    {
+        ActivityKind.ROAD_CYCLING,
+        ActivityKind.GRAVEL_CYCLING,
+        ActivityKind.MOUNTAIN_BIKING,
+        ActivityKind.ALPINE_SKIING,
+        ActivityKind.BACKCOUNTRY_SKIING,
+        ActivityKind.NORDIC_SKIING,
+    }
+)
+
+
+def calculate_representative_range(
+    values: Iterable[int | float],
+) -> RepresentativeRange | None:
+    """Build a range using linear interpolation over sorted observations.
+
+    Percentile position is ``(sample_size - 1) * percentile``. A fractional
+    position is interpolated between the adjacent observations. This explicit
+    rule keeps results independent of third-party statistical defaults.
+    """
+
+    observations = sorted(float(value) for value in values)
+    if not observations:
+        return None
+
+    def percentile(fraction: float) -> float:
+        position = (len(observations) - 1) * fraction
+        lower_index = floor(position)
+        upper_index = min(lower_index + 1, len(observations) - 1)
+        weight = position - lower_index
+        return (
+            observations[lower_index] * (1 - weight)
+            + observations[upper_index] * weight
+        )
+
+    return RepresentativeRange(
+        sample_size=len(observations),
+        p25=percentile(0.25),
+        median=percentile(0.5),
+        p75=percentile(0.75),
+        p90=percentile(0.9),
+    )
 
 
 def calculate_activity_summaries(
@@ -105,6 +158,31 @@ def _summarize_activity_kind(
         for activity in activities
         if activity.elevation_gain_meters is not None
     ]
+    climbing_densities = [
+        activity.elevation_gain_meters / (activity.distance_meters / 1_000)
+        for activity in activities
+        if activity.distance_meters > 0
+        and activity.elevation_gain_meters is not None
+    ]
+    pace_seconds_per_km = [
+        activity.moving_time_seconds / (activity.distance_meters / 1_000)
+        for activity in activities
+        if activity_kind in _PACE_ACTIVITY_KINDS
+        and activity.distance_meters > 0
+        and activity.moving_time_seconds > 0
+    ]
+    moving_speeds = [
+        activity.distance_meters / activity.moving_time_seconds
+        for activity in activities
+        if activity_kind in _SPEED_ACTIVITY_KINDS
+        and activity.distance_meters > 0
+        and activity.moving_time_seconds > 0
+    ]
+    distance_range = calculate_representative_range(distances)
+    moving_time_range = calculate_representative_range(moving_times)
+    elevation_range = calculate_representative_range(elevations)
+    assert distance_range is not None
+    assert moving_time_range is not None
     active_week_starts: set[date] = set()
     for activity in activities:
         local_date = activity.started_at.astimezone(zone).date()
@@ -118,7 +196,23 @@ def _summarize_activity_kind(
         total_elevation_gain_meters=fsum(elevations) if elevations else None,
         elevation_sample_count=len(elevations),
         active_weeks=len(active_week_starts),
-        median_distance_meters=median(distances),
-        median_moving_time_seconds=median(moving_times),
-        median_elevation_gain_meters=median(elevations) if elevations else None,
+        median_distance_meters=distance_range.median,
+        median_moving_time_seconds=moving_time_range.median,
+        median_elevation_gain_meters=(
+            elevation_range.median if elevation_range else None
+        ),
+        capability_ranges=ActivityCapabilityRanges(
+            distance_meters=distance_range,
+            moving_time_seconds=moving_time_range,
+            elevation_gain_meters=elevation_range,
+            elevation_gain_meters_per_km=calculate_representative_range(
+                climbing_densities
+            ),
+            pace_seconds_per_km=calculate_representative_range(
+                pace_seconds_per_km
+            ),
+            average_moving_speed_meters_per_second=calculate_representative_range(
+                moving_speeds
+            ),
+        ),
     )
