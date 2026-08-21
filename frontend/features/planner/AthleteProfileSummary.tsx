@@ -118,8 +118,9 @@ function ProfileContent({
       <div role="status" className="mt-5 rounded-lg bg-amber-50 p-4 text-sm text-amber-950">
         <p className="font-semibold">Profile refresh paused</p>
         <p className="mt-1">
-          The latest import was partial, so RouteMuse is not presenting it as a
-          definitive refreshed profile. Retry the import to completion.
+          A saved import for this period did not complete, so RouteMuse is not
+          presenting it as a definitive refreshed profile. Retry the import to
+          completion.
         </p>
       </div>
     );

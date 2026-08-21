@@ -58,6 +58,18 @@ def build_athlete_profile(
             },
         )
 
+    if history.has_incomplete_synchronization:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "code": "athlete_profile_history_incomplete",
+                "message": (
+                    "Complete the interrupted activity import before building "
+                    "a definitive athlete profile."
+                ),
+            },
+        )
+
     return calculate_activity_summaries(
         history.activities,
         period_start=request.start_date,

@@ -110,8 +110,10 @@ After RouteMuse confirms the saved Strava connection, the planner can display a
 profile for the selected period without requiring another import. A completed
 import refreshes the profile using the same period and timezone. A partial import
 keeps its synchronization warning and pauses the definitive profile view until a
-retry completes. Planning controls remain disabled because profile presentation
-does not yet implement route selection or recommendation behavior.
+retry completes. That incomplete state is derived from persisted synchronization
+runs, so it survives page reloads and period changes. Planning controls remain
+disabled because profile presentation does not yet implement route selection or
+recommendation behavior.
 
 `.env.example` also documents secret-free placeholders for future Ollama and openrouteservice adapters. Those placeholders are not used yet, and Ollama is not launched or downloaded by the application.
 

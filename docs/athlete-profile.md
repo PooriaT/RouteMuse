@@ -29,6 +29,10 @@ endpoint returns a controlled `409` error with code
 `strava_connection_required`. Persistence failures return a controlled `503`
 error with code `athlete_profile_unavailable`. A connected athlete with no
 supported rows in the selected period receives a successful typed empty profile.
+If an overlapping synchronization is still running or persisted only some pages,
+the endpoint returns `409` with code `athlete_profile_history_incomplete` instead
+of presenting those rows as definitive. One or more later completed imports must
+cover the affected interval before profile loading resumes.
 
 The response is the `AthleteProfile` domain model itself and contains:
 

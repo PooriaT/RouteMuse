@@ -1,12 +1,16 @@
 from collections.abc import Iterator
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
 
 from app.api.routes.athlete_profile import get_athlete_profile_repository
 from app.core.config import Settings
-from app.db.repositories.athlete_profile import PersistedActivityHistory
+from app.db.models import StravaSynchronizationRun, SynchronizationStatus
+from app.db.repositories.athlete_profile import (
+    PersistedActivityHistory,
+    _has_unresolved_incomplete_synchronization,
+)
 from app.domain.activities import ActivityKind
 from app.domain.athlete_profile import ActivityAnalysisRecord
 from app.main import create_app
@@ -249,6 +253,119 @@ def test_profile_requires_the_current_strava_connection(
     }
 
 
+def test_profile_rejects_persisted_history_from_an_incomplete_synchronization(
+    client: TestClient, repository: FakeAthleteProfileRepository
+) -> None:
+    assert repository.history is not None
+    repository.history = PersistedActivityHistory(
+        activities=repository.history.activities,
+        has_incomplete_synchronization=True,
+    )
+
+    response = client.post("/api/v1/athlete-profile", json=profile_request())
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "detail": {
+            "code": "athlete_profile_history_incomplete",
+            "message": (
+                "Complete the interrupted activity import before building "
+                "a definitive athlete profile."
+            ),
+        }
+    }
+
+
+def test_later_completed_ranges_jointly_resolve_partial_coverage() -> None:
+    selected_start = datetime(2026, 1, 1, tzinfo=UTC)
+    split = datetime(2026, 2, 1, tzinfo=UTC)
+    selected_end = datetime(2026, 3, 1, tzinfo=UTC)
+    runs = [
+        synchronization_run(
+            1,
+            SynchronizationStatus.PARTIAL,
+            selected_start,
+            selected_end,
+        ),
+        synchronization_run(
+            2,
+            SynchronizationStatus.COMPLETED,
+            selected_start,
+            split,
+        ),
+        synchronization_run(
+            3,
+            SynchronizationStatus.COMPLETED,
+            split,
+            selected_end,
+        ),
+    ]
+
+    assert not _has_unresolved_incomplete_synchronization(
+        runs,
+        start_at=selected_start,
+        end_at_exclusive=selected_end,
+    )
+
+
+def test_partial_coverage_remains_unresolved_when_completed_retry_has_a_gap() -> None:
+    selected_start = datetime(2026, 1, 1, tzinfo=UTC)
+    gap_start = datetime(2026, 1, 20, tzinfo=UTC)
+    gap_end = datetime(2026, 2, 1, tzinfo=UTC)
+    selected_end = datetime(2026, 3, 1, tzinfo=UTC)
+    runs = [
+        synchronization_run(
+            1,
+            SynchronizationStatus.PARTIAL,
+            selected_start,
+            selected_end,
+        ),
+        synchronization_run(
+            2,
+            SynchronizationStatus.COMPLETED,
+            selected_start,
+            gap_start,
+        ),
+        synchronization_run(
+            3,
+            SynchronizationStatus.COMPLETED,
+            gap_end,
+            selected_end,
+        ),
+    ]
+
+    assert _has_unresolved_incomplete_synchronization(
+        runs,
+        start_at=selected_start,
+        end_at_exclusive=selected_end,
+    )
+
+
+def test_completed_run_that_finished_before_partial_does_not_resolve_it() -> None:
+    selected_start = datetime(2026, 1, 1, tzinfo=UTC)
+    selected_end = datetime(2026, 3, 1, tzinfo=UTC)
+    completed = synchronization_run(
+        2,
+        SynchronizationStatus.COMPLETED,
+        selected_start,
+        selected_end,
+    )
+    partial = synchronization_run(
+        1,
+        SynchronizationStatus.PARTIAL,
+        selected_start,
+        selected_end,
+    )
+    assert completed.completed_at is not None
+    completed.completed_at = completed.completed_at - timedelta(days=1)
+
+    assert _has_unresolved_incomplete_synchronization(
+        [partial, completed],
+        start_at=selected_start,
+        end_at_exclusive=selected_end,
+    )
+
+
 @pytest.mark.parametrize(
     "payload",
     [
@@ -274,3 +391,24 @@ def test_profile_reuses_controlled_calendar_period_validation(
     assert response.status_code == 422
     assert response.json()["detail"]
     assert repository.calls == []
+
+
+def synchronization_run(
+    run_id: int,
+    status: SynchronizationStatus,
+    start_at: datetime,
+    end_at: datetime,
+) -> StravaSynchronizationRun:
+    run = StravaSynchronizationRun(
+        connection_id=1,
+        requested_start_at=start_at,
+        requested_end_at=end_at,
+        status=status,
+        completed_at=(
+            None
+            if status == SynchronizationStatus.RUNNING
+            else datetime(2026, 4, 1, tzinfo=UTC) + timedelta(seconds=run_id)
+        ),
+    )
+    run.id = run_id
+    return run

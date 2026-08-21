@@ -165,6 +165,26 @@ describe("PlannerForm", () => {
     });
   });
 
+  it("preserves an incomplete synchronization warning across profile loads", async () => {
+    mockConnected();
+    vi.mocked(api.athleteProfile).mockRejectedValue(
+      new ApiError(
+        "raw FastAPI detail",
+        409,
+        "athlete_profile_history_incomplete",
+      ),
+    );
+
+    renderPlanner();
+
+    const paused = await screen.findByText("Profile refresh paused");
+    expect(paused.parentElement).toHaveAttribute("role", "status");
+    expect(paused.parentElement).toHaveTextContent(
+      "not presenting it as a definitive refreshed profile",
+    );
+    expect(screen.queryByText("Primary activity")).not.toBeInTheDocument();
+  });
+
   it("rechecks server status when the planner is restored after OAuth navigation", async () => {
     vi.mocked(api.stravaStatus)
       .mockResolvedValueOnce(disconnected)
@@ -302,6 +322,50 @@ describe("PlannerForm", () => {
       end_date: "2026-08-19",
       timezone: expect.any(String),
     });
+  });
+
+  it("does not let an older import refresh overwrite a newly selected period", async () => {
+    let finishImport: ((result: StravaSynchronizationResult) => void) | undefined;
+    const newPeriodProfile = {
+      ...athleteProfile,
+      period_start: "2025-09-01",
+      period_end: "2026-08-19",
+    };
+    vi.mocked(api.athleteProfile).mockImplementation(async (request) =>
+      request.start_date === "2025-09-01"
+        ? newPeriodProfile
+        : emptyAthleteProfile,
+    );
+    vi.mocked(api.syncStravaActivities).mockReturnValue(
+      new Promise((resolve) => {
+        finishImport = resolve;
+      }),
+    );
+    const importButton = await renderConnectedPlanner();
+    await waitFor(() => expect(api.athleteProfile).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(importButton);
+    fireEvent.change(screen.getByLabelText("Start date"), {
+      target: { value: "2025-09-01" },
+    });
+
+    await waitFor(() => expect(api.athleteProfile).toHaveBeenCalledTimes(2));
+    expect(api.athleteProfile).toHaveBeenLastCalledWith({
+      start_date: "2025-09-01",
+      end_date: "2026-08-19",
+      timezone: expect.any(String),
+    });
+    expect(await screen.findAllByText("Road cycling")).toHaveLength(2);
+    expect(screen.getByText("Period").nextSibling).toHaveTextContent(
+      "2025-09-01 to 2026-08-19",
+    );
+
+    finishImport?.(completed);
+    expect(await screen.findByText("Activity import complete")).toBeInTheDocument();
+    await waitFor(() => expect(api.athleteProfile).toHaveBeenCalledTimes(2));
+    expect(screen.getByText("Period").nextSibling).toHaveTextContent(
+      "2025-09-01 to 2026-08-19",
+    );
   });
 
   it("shows a dedicated zero-activity state", async () => {

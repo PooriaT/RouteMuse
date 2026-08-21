@@ -40,12 +40,21 @@ export function PlannerForm({
     useState<AthleteProfileViewStatus>("idle");
   const [profileError, setProfileError] = useState<string | null>(null);
   const profileRequestSequence = useRef(0);
+  const selectedProfileRequest = useRef<AthleteProfileRequest | null>(null);
   const hasInvalidRange = Boolean(
     dates.startDate && dates.endDate && dates.startDate > dates.endDate,
   );
   const hasValidPeriod = Boolean(
     dates.startDate && dates.endDate && !hasInvalidRange,
   );
+  selectedProfileRequest.current =
+    timezone && hasValidPeriod
+      ? {
+          start_date: dates.startDate,
+          end_date: dates.endDate,
+          timezone,
+        }
+      : null;
 
   useEffect(() => {
     setTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone);
@@ -66,6 +75,15 @@ export function PlannerForm({
       setProfileStatus("ready");
     } catch (error) {
       if (sequence !== profileRequestSequence.current) return;
+      if (
+        error instanceof ApiError &&
+        error.code === "athlete_profile_history_incomplete"
+      ) {
+        setProfile(null);
+        setProfileError(null);
+        setProfileStatus("partial");
+        return;
+      }
       setProfileError(profileErrorMessage(error));
       setProfileStatus("error");
     }
@@ -92,6 +110,15 @@ export function PlannerForm({
 
   const handleSynchronizationComplete = useCallback(
     (request: AthleteProfileRequest) => {
+      const selected = selectedProfileRequest.current;
+      if (
+        selected === null ||
+        selected.start_date !== request.start_date ||
+        selected.end_date !== request.end_date ||
+        selected.timezone !== request.timezone
+      ) {
+        return;
+      }
       void requestProfile(request);
     },
     [requestProfile],
@@ -216,7 +243,7 @@ function profileErrorMessage(error: unknown) {
   if (!(error instanceof ApiError)) {
     return "The athlete profile could not be loaded. Try again.";
   }
-  if (error.code === "strava_connection_required" || error.status === 409) {
+  if (error.code === "strava_connection_required") {
     return "Connect Strava before loading an athlete profile.";
   }
   if (error.status === 422) {
