@@ -4,6 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { PlannerForm } from "@/features/planner/PlannerForm";
 import { ApiError, api } from "@/lib/api/client";
+import type { ActivityType } from "@/types/activity";
+import type { AthleteProfile } from "@/types/athleteProfile";
 import type {
   StravaConnectionStatus,
   StravaSynchronizationResult,
@@ -29,10 +31,20 @@ vi.mock("@/lib/api/client", async (importOriginal) => {
   };
 });
 
-const types = [
+const types: ActivityType[] = [
   { value: "walking", label: "Walking" },
   { value: "trail_running", label: "Trail Running" },
+  { value: "road_cycling", label: "Road Cycling" },
+  { value: "hiking", label: "Hiking" },
 ];
+
+const hikingProfile: AthleteProfile = {
+  ...athleteProfile,
+  dominant_activity: {
+    ...athleteProfile.dominant_activity!,
+    activity_kind: "hiking",
+  },
+};
 
 const disconnected: StravaConnectionStatus = {
   connected: false,
@@ -501,10 +513,10 @@ describe("PlannerForm", () => {
     expect(document.body).not.toHaveTextContent("refresh_token");
   });
 
-  it("enables location search while retaining disabled future controls", () => {
+  it("enables available planning inputs while retaining disabled future controls", () => {
     renderPlanner();
     expect(screen.getByLabelText("Location")).toBeEnabled();
-    expect(screen.getByLabelText("Activity type")).toBeDisabled();
+    expect(screen.getByLabelText("Activity type")).toBeEnabled();
     expect(screen.getByLabelText("Target distance (km), optional")).toBeDisabled();
     expect(screen.getByLabelText("Target duration (minutes), optional")).toBeDisabled();
     expect(screen.getByLabelText("Desired challenge, optional")).toBeDisabled();
@@ -513,7 +525,138 @@ describe("PlannerForm", () => {
     expect(screen.getByRole("option", { name: "Trail Running" })).toHaveValue(
       "trail_running",
     );
-    expect(screen.getByText(/Choose a planning area now/)).toBeInTheDocument();
+    expect(screen.getByText(/Choose a planning area and activity type now/)).toBeInTheDocument();
+  });
+
+  it("defaults road cycling from the athlete profile", async () => {
+    mockConnected();
+    vi.mocked(api.athleteProfile).mockResolvedValue(athleteProfile);
+
+    renderPlanner();
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("Activity type")).toHaveValue(
+        "road_cycling",
+      ),
+    );
+    expect(screen.getByText("Suggested from your athlete profile")).toBeInTheDocument();
+  });
+
+  it("defaults hiking from the athlete profile", async () => {
+    mockConnected();
+    vi.mocked(api.athleteProfile).mockResolvedValue(hikingProfile);
+
+    renderPlanner();
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("Activity type")).toHaveValue("hiking"),
+    );
+  });
+
+  it("preserves a manual override across profile refreshes", async () => {
+    mockConnected();
+    vi.mocked(api.athleteProfile)
+      .mockResolvedValueOnce(athleteProfile)
+      .mockResolvedValueOnce(hikingProfile);
+    renderPlanner();
+    const selector = await screen.findByLabelText("Activity type");
+    await waitFor(() => expect(selector).toHaveValue("road_cycling"));
+
+    fireEvent.change(selector, { target: { value: "walking" } });
+    expect(selector).toHaveValue("walking");
+    expect(screen.queryByText("Suggested from your athlete profile")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Import activities" }));
+
+    await waitFor(() => expect(api.athleteProfile).toHaveBeenCalledTimes(2));
+    expect(selector).toHaveValue("walking");
+  });
+
+  it("allows the user to clear an activity selection", async () => {
+    mockConnected();
+    vi.mocked(api.athleteProfile)
+      .mockResolvedValueOnce(athleteProfile)
+      .mockResolvedValueOnce(hikingProfile);
+    renderPlanner();
+    const selector = await screen.findByLabelText("Activity type");
+    await waitFor(() => expect(selector).toHaveValue("road_cycling"));
+
+    fireEvent.change(selector, { target: { value: "" } });
+
+    expect(selector).toHaveValue("");
+    expect(screen.queryByText("Suggested from your athlete profile")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Import activities" }));
+    await waitFor(() => expect(api.athleteProfile).toHaveBeenCalledTimes(2));
+    expect(selector).toHaveValue("");
+  });
+
+  it("clears an automatic selection when the current profile is invalidated", async () => {
+    mockConnected();
+    vi.mocked(api.athleteProfile)
+      .mockResolvedValueOnce(athleteProfile)
+      .mockRejectedValueOnce(
+        new ApiError("raw", 503, "athlete_profile_unavailable"),
+      );
+    renderPlanner();
+    const selector = await screen.findByLabelText("Activity type");
+    await waitFor(() => expect(selector).toHaveValue("road_cycling"));
+
+    fireEvent.change(screen.getByLabelText("Start date"), {
+      target: { value: "2025-09-01" },
+    });
+
+    await screen.findByRole("alert");
+    expect(selector).toHaveValue("");
+    expect(screen.queryByText("Suggested from your athlete profile")).not.toBeInTheDocument();
+  });
+
+  it("follows a refreshed profile while the selection remains automatic", async () => {
+    mockConnected();
+    vi.mocked(api.athleteProfile)
+      .mockResolvedValueOnce(athleteProfile)
+      .mockResolvedValueOnce(hikingProfile);
+    renderPlanner();
+    const selector = await screen.findByLabelText("Activity type");
+    await waitFor(() => expect(selector).toHaveValue("road_cycling"));
+
+    fireEvent.click(screen.getByRole("button", { name: "Import activities" }));
+
+    await waitFor(() => expect(selector).toHaveValue("hiking"));
+    expect(screen.getByText("Suggested from your athlete profile")).toBeInTheDocument();
+  });
+
+  it("does not invent a default for an empty profile", async () => {
+    await renderConnectedPlanner();
+
+    await waitFor(() => expect(api.athleteProfile).toHaveBeenCalled());
+    expect(screen.getByLabelText("Activity type")).toHaveValue("");
+  });
+
+  it("safely ignores a dominant kind missing from API-provided options", async () => {
+    mockConnected();
+    vi.mocked(api.athleteProfile).mockResolvedValue({
+      ...athleteProfile,
+      dominant_activity: {
+        ...athleteProfile.dominant_activity!,
+        activity_kind: "swimming",
+      },
+    } as unknown as AthleteProfile);
+
+    renderPlanner();
+
+    await screen.findByText("Primary activity");
+    expect(screen.getByLabelText("Activity type")).toHaveValue("");
+    expect(screen.queryByText("Suggested from your athlete profile")).not.toBeInTheDocument();
+  });
+
+  it("keeps the API-backed selector keyboard accessible", () => {
+    renderPlanner();
+    const selector = screen.getByRole("combobox", { name: "Activity type" });
+
+    selector.focus();
+    expect(selector).toHaveFocus();
+    expect(selector).toBeEnabled();
+    fireEvent.change(selector, { target: { value: "trail_running" } });
+    expect(selector).toHaveValue("trail_running");
   });
 
   it("renders a clear recommendations empty state", () => {
