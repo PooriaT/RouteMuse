@@ -329,7 +329,7 @@ def test_provider_limit_is_explicit_and_not_clamped() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         seen.append(json.loads(request.content))
         return httpx.Response(400, json={
-            "error": {"code": 2004, "message": "request exceeds limit"}
+            "error": {"code": 2013, "message": "request exceeds limit"}
         })
 
     request = RoutingRequest(
@@ -342,6 +342,13 @@ def test_provider_limit_is_explicit_and_not_clamped() -> None:
     with pytest.raises(ProviderLimitError):
         asyncio.run(invoke(handler, request))
     assert seen[0]["options"]["round_trip"]["length"] == 999999.0
+
+
+def test_missing_parameter_error_is_not_mislabeled_as_provider_limit() -> None:
+    with pytest.raises(ProviderInvalidRequestError):
+        asyncio.run(invoke(lambda _: httpx.Response(400, json={
+            "error": {"code": 2004, "message": "missing parameter"}
+        })))
 
 
 def test_malformed_extras_are_rejected() -> None:

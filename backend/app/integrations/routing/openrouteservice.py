@@ -184,7 +184,7 @@ class OpenRouteServiceRoutingProvider:
             raise RouteProviderRateLimitError(_retry_after(response))
         if response.status_code >= 500:
             raise RouteProviderTemporaryError
-        if response.status_code == 400 and _ors_error_code(response) == 2004:
+        if response.status_code == 400 and _ors_error_code(response) == 2013:
             raise ProviderLimitError
         if response.status_code in {404, 422}:
             raise NoRouteFoundError
