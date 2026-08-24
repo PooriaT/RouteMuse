@@ -117,9 +117,12 @@ profile for the selected period without requiring another import. A completed
 import refreshes the profile using the same period and timezone. A partial import
 keeps its synchronization warning and pauses the definitive profile view until a
 retry completes. That incomplete state is derived from persisted synchronization
-runs, so it survives page reloads and period changes. Planning controls remain
-disabled because profile presentation does not yet implement route selection or
-recommendation behavior.
+runs, so it survives page reloads and period changes. The planner then selects a
+normalized planning area, chooses or overrides the RouteMuse activity type, and
+optionally accepts effort, route-shape, and novelty preferences. Display units are
+converted to canonical meters and seconds before `POST /api/v1/planning/validate`.
+Empty overrides remain null for future profile-driven inference. Validation does not
+generate a route; provider-backed route discovery remains future work.
 
 `.env.example` documents secret-free geocoding configuration and future Ollama settings. Ollama is not launched or downloaded by the application.
 
@@ -143,4 +146,4 @@ poetry run uvicorn app.main:app --reload
 
 ## Current limitations and next integrations
 
-This scaffold has no RouteMuse user authentication, route discovery/generation, route difficulty scoring, recommendation ranking, GPX, or Ollama inference. Planning controls are intentionally disabled and recommendations are empty. Strava OAuth credentials are connected and encrypted server-side; historical activities can be synchronized idempotently, and exact `sport_type` values are normalized at the integration boundary while unsupported values remain identifiable. Deterministic athlete analysis is implemented and presented from persisted history. Subsequent work can add factual geospatial adapters and deterministic candidate scoring before any LLM explanation layer.
+This scaffold has no RouteMuse user authentication, route discovery/generation, route difficulty scoring, recommendation ranking, GPX, or Ollama inference. Planning inputs can be prepared and schema-validated, but recommendations remain empty. Strava OAuth credentials are connected and encrypted server-side; historical activities can be synchronized idempotently, and exact `sport_type` values are normalized at the integration boundary while unsupported values remain identifiable. Deterministic athlete analysis is implemented and presented from persisted history. Subsequent work can add factual geospatial adapters and deterministic candidate scoring before any LLM explanation layer.

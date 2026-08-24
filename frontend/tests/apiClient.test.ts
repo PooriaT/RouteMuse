@@ -101,6 +101,24 @@ describe("RouteMuse API client", () => {
     );
   });
 
+  it("posts the canonical planning request to the validation endpoint", async () => {
+    const request = {
+      planning_area: { latitude: 49.28, longitude: -123.12, display_name: "Vancouver", bounding_box: null, source_provider: "openrouteservice", source_attribution: "© OpenStreetMap contributors" },
+      activity_kind: "hiking" as const,
+      target_distance_meters: 25_000,
+      target_duration_seconds: 5_400,
+      desired_challenge: "moderate" as const,
+      route_shape: "loop" as const,
+      novelty_preference: "balanced" as const,
+    };
+    fetchMock.mockResolvedValue(jsonResponse(request));
+    await expect(api.validatePlanningRequest(request)).resolves.toEqual(request);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:8000/api/v1/planning/validate",
+      expect.objectContaining({ method: "POST", body: JSON.stringify(request), headers: { "Content-Type": "application/json" } }),
+    );
+  });
+
   it("preserves safe status, retry, and partial-result error metadata", async () => {
     const partial = {
       status: "partial",
