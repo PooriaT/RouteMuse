@@ -5,7 +5,12 @@ from app.domain.activities import Activity
 from app.domain.athlete_profile import AthleteProfile
 from app.domain.planning_areas import PlanningArea
 from app.domain.recommendations import RecommendationExplanation
-from app.domain.routes import RouteCandidate
+from app.domain.routes import (
+    RouteCandidate,
+    RouteDiscoveryRequest,
+    RoutingRequest,
+    TrailFeature,
+)
 
 
 class ActivityProvider(Protocol):
@@ -17,13 +22,11 @@ class GeocodingProvider(Protocol):
 
 
 class RouteDiscoveryProvider(Protocol):
-    async def discover(
-        self, latitude: float, longitude: float
-    ) -> list[RouteCandidate]: ...
+    async def discover(self, request: RouteDiscoveryRequest) -> list[TrailFeature]: ...
 
 
 class RoutingProvider(Protocol):
-    async def route(self, waypoints: list[tuple[float, float]]) -> RouteCandidate: ...
+    async def route(self, request: RoutingRequest) -> RouteCandidate: ...
 
 
 class LlmProvider(Protocol):
