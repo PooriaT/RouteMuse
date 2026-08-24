@@ -130,6 +130,50 @@ def test_trail_difficulty_has_activity_relevant_interpretations(
     assert assessed(hard) > assessed(easy)
 
 
+@pytest.mark.parametrize(
+    ("kind", "mismatched_label"),
+    [
+        (ActivityKind.HIKING, "mountain_bike_s5"),
+        (ActivityKind.MOUNTAIN_BIKING, "difficult_alpine_hiking"),
+    ],
+)
+def test_trail_difficulty_rejects_another_activity_scale(
+    kind: ActivityKind, mismatched_label: str
+) -> None:
+    facts = [
+        TechnicalSummary(
+            characteristic="trail_difficulty",
+            value=mismatched_label,
+            proportion=1.0,
+        )
+    ]
+    assessment = assess_route_difficulty(route(kind, technical=facts))
+
+    assert component(assessment, "trail_difficulty").score is None
+    assert "missing_trail_difficulty_evidence" in assessment.warnings
+
+
+def test_partial_technical_distributions_have_specific_warnings() -> None:
+    facts = [
+        TechnicalSummary(
+            characteristic="steepness", value="steep_incline", proportion=0.5
+        ),
+        TechnicalSummary(
+            characteristic="trail_difficulty", value="mountain_hiking", proportion=0.5
+        ),
+    ]
+    assessment = assess_route_difficulty(
+        route(
+            surfaces=[SurfaceSummary(value="ground", proportion=1.0)],
+            technical=facts,
+        )
+    )
+
+    assert "partial_surface_evidence" not in assessment.warnings
+    assert "partial_steepness_evidence" in assessment.warnings
+    assert "partial_trail_difficulty_evidence" in assessment.warnings
+
+
 def test_scoring_is_bounded_versioned_batch_independent_and_copying() -> None:
     candidate = route(surfaces=[SurfaceSummary(value="sand", proportion=1.0)])
     alone = assess_route_difficulty(candidate)

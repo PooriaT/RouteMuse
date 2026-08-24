@@ -164,19 +164,25 @@ STEEPNESS_SEVERITY = {
     "very_steep_incline": 0.85,
     "extreme_incline": 1.0,
 }
-TRAIL_SEVERITY = {
+HIKING_TRAIL_SEVERITY = {
     "hiking": 0.1,
     "mountain_hiking": 0.3,
     "demanding_mountain_hiking": 0.5,
     "alpine_hiking": 0.7,
     "demanding_alpine_hiking": 0.85,
     "difficult_alpine_hiking": 1.0,
+}
+MOUNTAIN_BIKE_TRAIL_SEVERITY = {
     "mountain_bike_s0": 0.1,
     "mountain_bike_s1": 0.25,
     "mountain_bike_s2": 0.45,
     "mountain_bike_s3": 0.65,
     "mountain_bike_s4": 0.85,
     "mountain_bike_s5": 1.0,
+}
+TRAIL_SEVERITY_BY_ACTIVITY = {
+    ActivityKind.HIKING: HIKING_TRAIL_SEVERITY,
+    ActivityKind.MOUNTAIN_BIKING: MOUNTAIN_BIKE_TRAIL_SEVERITY,
 }
 
 
@@ -278,7 +284,9 @@ def assess_route_difficulty(candidate: RouteCandidate) -> RouteDifficultyAssessm
             if item.characteristic == "trail_difficulty"
         ]
         trail_score, trail_coverage = _distribution(
-            trail, TRAIL_SEVERITY, candidate.distance_meters
+            trail,
+            TRAIL_SEVERITY_BY_ACTIVITY[candidate.activity_kind],
+            candidate.distance_meters,
         )
         values["trail_difficulty"] = (
             trail_score,
@@ -314,8 +322,17 @@ def assess_route_difficulty(candidate: RouteCandidate) -> RouteDifficultyAssessm
         for item in components
         if not item.evidence_available
     ]
-    if surface_score is not None and surface_coverage < 1:
-        warnings.append("partial_surface_evidence")
+    distribution_coverages = {
+        "surface": surface_coverage,
+        "steepness": steep_coverage,
+    }
+    if "trail_difficulty" in calibration.component_weights:
+        distribution_coverages["trail_difficulty"] = trail_coverage
+    warnings.extend(
+        f"partial_{name}_evidence"
+        for name, component_coverage in distribution_coverages.items()
+        if values[name][0] is not None and component_coverage < 1
+    )
     return RouteDifficultyAssessment(
         score=score,
         components=components,
