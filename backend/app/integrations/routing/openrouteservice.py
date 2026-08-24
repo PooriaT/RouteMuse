@@ -1,4 +1,4 @@
-"""OpenRouteService Directions adapter for provider-grounded foot routes."""
+"""OpenRouteService Directions adapter for provider-grounded routes."""
 
 from typing import Any, Literal
 from uuid import uuid4
@@ -24,6 +24,7 @@ from app.integrations.routing.errors import (
     ProviderAuthenticationError,
     ProviderConfigurationError,
     ProviderInvalidRequestError,
+    ProviderLimitError,
     RouteProviderMalformedResponseError,
     RouteProviderRateLimitError,
     RouteProviderTemporaryError,
@@ -35,6 +36,11 @@ DIRECTIONS_URL = "https://api.openrouteservice.org/v2/directions/{profile}/geojs
 ACTIVITY_PROFILES: dict[ActivityKind, str] = {
     ActivityKind.WALKING: "foot-walking",
     ActivityKind.HIKING: "foot-hiking",
+    ActivityKind.ROAD_CYCLING: "cycling-road",
+    # ORS has no gravel profile. RouteMuse initially routes gravel candidates with
+    # cycling-regular and leaves suitability decisions to downstream scoring.
+    ActivityKind.GRAVEL_CYCLING: "cycling-regular",
+    ActivityKind.MOUNTAIN_BIKING: "cycling-mountain",
 }
 EXTRA_INFORMATION = ["surface", "waytype", "steepness", "traildifficulty"]
 
@@ -56,10 +62,15 @@ STEEPNESS = {
     1: "gentle_incline", 2: "moderate_incline", 3: "steep_incline",
     4: "very_steep_incline", 5: "extreme_incline",
 }
-TRAIL_DIFFICULTY = {
+HIKING_TRAIL_DIFFICULTY = {
     0: "unrated", 1: "hiking", 2: "mountain_hiking",
     3: "demanding_mountain_hiking", 4: "alpine_hiking",
     5: "demanding_alpine_hiking", 6: "difficult_alpine_hiking",
+}
+MOUNTAIN_BIKE_TRAIL_DIFFICULTY = {
+    0: "unrated", 1: "mountain_bike_s0", 2: "mountain_bike_s1",
+    3: "mountain_bike_s2", 4: "mountain_bike_s3",
+    5: "mountain_bike_s4", 6: "mountain_bike_s5",
 }
 
 
@@ -173,6 +184,8 @@ class OpenRouteServiceRoutingProvider:
             raise RouteProviderRateLimitError(_retry_after(response))
         if response.status_code >= 500:
             raise RouteProviderTemporaryError
+        if response.status_code == 400 and _ors_error_code(response) == 2004:
+            raise ProviderLimitError
         if response.status_code in {404, 422}:
             raise NoRouteFoundError
         if response.is_error:
@@ -180,13 +193,13 @@ class OpenRouteServiceRoutingProvider:
 
         try:
             payload = _FeatureCollection.model_validate(response.json())
-            return self._normalize(payload, request)
+            return self._normalize(payload, request, profile)
         except (ValueError, TypeError, ValidationError) as exc:
             raise RouteProviderMalformedResponseError from exc
 
     @staticmethod
     def _normalize(
-        payload: _FeatureCollection, request: RoutingRequest
+        payload: _FeatureCollection, request: RoutingRequest, profile: str
     ) -> RouteCandidate:
         feature = payload.features[0]
         summary = feature.properties.summary
@@ -230,7 +243,7 @@ class OpenRouteServiceRoutingProvider:
                 *_technical(
                     extras.get("traildifficulty"),
                     "trail_difficulty",
-                    TRAIL_DIFFICULTY,
+                    _trail_difficulty_labels(profile),
                     summary.distance,
                 ),
             ],
@@ -238,6 +251,7 @@ class OpenRouteServiceRoutingProvider:
                 provider="openrouteservice",
                 attribution=payload.metadata.attribution,
                 provider_request_id=payload.metadata.id,
+                provider_profile=profile,
             )],
             generation_provenance=generation,
             warnings=[warning.message for warning in feature.properties.warnings],
@@ -323,3 +337,18 @@ def _retry_after(response: httpx.Response) -> int | None:
         return int(response.headers["Retry-After"])
     except (KeyError, ValueError):
         return None
+
+
+def _ors_error_code(response: httpx.Response) -> int | None:
+    """Read only ORS's stable error code; never expose its response body."""
+    try:
+        code = response.json()["error"]["code"]
+        return code if isinstance(code, int) else None
+    except (ValueError, TypeError, KeyError):
+        return None
+
+
+def _trail_difficulty_labels(profile: str) -> dict[int, str]:
+    if profile.startswith("cycling-"):
+        return MOUNTAIN_BIKE_TRAIL_DIFFICULTY
+    return HIKING_TRAIL_DIFFICULTY

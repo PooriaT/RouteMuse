@@ -58,6 +58,7 @@ class ProviderProvenance(CanonicalModel):
     attribution: str = Field(min_length=1)
     source_ids: list[str] = Field(default_factory=list)
     provider_request_id: str | None = Field(default=None, min_length=1)
+    provider_profile: str | None = Field(default=None, min_length=1)
 
 
 class NamedRouteReference(CanonicalModel):

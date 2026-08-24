@@ -25,6 +25,13 @@ class ProviderInvalidRequestError(RouteProviderError):
         super().__init__("The route provider rejected the routing request")
 
 
+class ProviderLimitError(RouteProviderError):
+    """The request exceeds a limit enforced by the selected provider."""
+
+    def __init__(self) -> None:
+        super().__init__("The routing request exceeds a provider limit")
+
+
 class RouteProviderTimeoutError(RouteProviderError):
     def __init__(self) -> None:
         super().__init__("The route provider timed out")
