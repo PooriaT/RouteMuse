@@ -154,13 +154,21 @@ export function PlannerForm({
   }, [hasValidPeriod, loadSelectedProfile, stravaConnected, timezone]);
 
   useEffect(() => {
-    if (profileStatus !== "ready" || profile === null) return;
-
     setActivitySelection((current) => {
+      if (profileStatus !== "ready" || profile === null) {
+        if (current.source === "user" || current.kind === null) return current;
+        return { kind: null, source: "automatic" };
+      }
+
       const selectionIsSupported =
         current.kind !== null &&
         activityTypes.some((activityType) => activityType.value === current.kind);
-      if (current.source === "user" && selectionIsSupported) return current;
+      if (
+        current.source === "user" &&
+        (current.kind === null || selectionIsSupported)
+      ) {
+        return current;
+      }
 
       const dominantKind = profile.dominant_activity?.activity_kind ?? null;
       const supportedDominant =
@@ -179,6 +187,10 @@ export function PlannerForm({
   }, [activityTypes, profile, profileStatus]);
 
   const handleActivityChange = (value: string) => {
+    if (value === "") {
+      setActivitySelection({ kind: null, source: "user" });
+      return;
+    }
     const selectedKind = activityTypes.find(
       (activityType) => activityType.value === value,
     )?.value;

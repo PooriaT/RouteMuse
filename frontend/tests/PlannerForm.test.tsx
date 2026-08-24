@@ -571,6 +571,44 @@ describe("PlannerForm", () => {
     expect(selector).toHaveValue("walking");
   });
 
+  it("allows the user to clear an activity selection", async () => {
+    mockConnected();
+    vi.mocked(api.athleteProfile)
+      .mockResolvedValueOnce(athleteProfile)
+      .mockResolvedValueOnce(hikingProfile);
+    renderPlanner();
+    const selector = await screen.findByLabelText("Activity type");
+    await waitFor(() => expect(selector).toHaveValue("road_cycling"));
+
+    fireEvent.change(selector, { target: { value: "" } });
+
+    expect(selector).toHaveValue("");
+    expect(screen.queryByText("Suggested from your athlete profile")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Import activities" }));
+    await waitFor(() => expect(api.athleteProfile).toHaveBeenCalledTimes(2));
+    expect(selector).toHaveValue("");
+  });
+
+  it("clears an automatic selection when the current profile is invalidated", async () => {
+    mockConnected();
+    vi.mocked(api.athleteProfile)
+      .mockResolvedValueOnce(athleteProfile)
+      .mockRejectedValueOnce(
+        new ApiError("raw", 503, "athlete_profile_unavailable"),
+      );
+    renderPlanner();
+    const selector = await screen.findByLabelText("Activity type");
+    await waitFor(() => expect(selector).toHaveValue("road_cycling"));
+
+    fireEvent.change(screen.getByLabelText("Start date"), {
+      target: { value: "2025-09-01" },
+    });
+
+    await screen.findByRole("alert");
+    expect(selector).toHaveValue("");
+    expect(screen.queryByText("Suggested from your athlete profile")).not.toBeInTheDocument();
+  });
+
   it("follows a refreshed profile while the selection remains automatic", async () => {
     mockConnected();
     vi.mocked(api.athleteProfile)
