@@ -27,7 +27,7 @@ they are not calculated route difficulty or novelty scores.
 The contract deliberately applies no guessed athletic limits and does not reject an
 unusual implied pace when both distance and duration are supplied. It rejects only
 objective schema errors such as invalid coordinates, bounds, enum values, non-positive
-targets, and non-finite distance.
+targets, non-finite distance, boolean numeric targets, and unknown request fields.
 
 `POST /api/v1/planning/validate` validates and returns the normalized contract. It
 does not call a routing, geocoding, activity, or LLM provider and does not persist the

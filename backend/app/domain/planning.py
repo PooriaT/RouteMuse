@@ -1,6 +1,6 @@
 from enum import StrEnum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.domain.activities import ActivityKind
 from app.domain.planning_areas import PlanningArea
@@ -26,12 +26,14 @@ class NoveltyPreference(StrEnum):
 class RoutePlanningRequest(BaseModel):
     """Provider-independent inputs for future route planning."""
 
+    model_config = ConfigDict(extra="forbid")
+
     planning_area: PlanningArea
     activity_kind: ActivityKind
     target_distance_meters: float | None = Field(
-        default=None, gt=0, allow_inf_nan=False
+        default=None, gt=0, allow_inf_nan=False, strict=True
     )
-    target_duration_seconds: int | None = Field(default=None, gt=0)
+    target_duration_seconds: int | None = Field(default=None, gt=0, strict=True)
     desired_challenge: DesiredChallenge | None = None
     route_shape: RouteShape | None = None
     novelty_preference: NoveltyPreference | None = None

@@ -90,8 +90,10 @@ def test_each_route_shape_is_supported(route_shape: RouteShape) -> None:
         (("target_distance_meters",), -1),
         (("target_distance_meters",), math.nan),
         (("target_distance_meters",), math.inf),
+        (("target_distance_meters",), True),
         (("target_duration_seconds",), 0),
         (("target_duration_seconds",), -1),
+        (("target_duration_seconds",), True),
         (("activity_kind",), "swimming"),
         (("route_shape",), "triangle"),
         (("desired_challenge",), "extreme"),
@@ -109,6 +111,13 @@ def test_invalid_request_values_are_rejected(
 
     with pytest.raises(ValidationError):
         RoutePlanningRequest.model_validate(payload)
+
+
+def test_unknown_planning_request_fields_are_rejected() -> None:
+    with pytest.raises(ValidationError):
+        RoutePlanningRequest.model_validate(
+            {**minimal_payload(), "target_distnace_meters": 10_000}
+        )
 
 
 def test_unusual_distance_duration_combination_is_allowed() -> None:
@@ -148,9 +157,20 @@ def test_validate_endpoint_echoes_normalized_request_without_side_effects(
     }
 
 
-def test_validate_endpoint_rejects_invalid_request() -> None:
+@pytest.mark.parametrize(
+    "invalid_override",
+    [
+        {"target_distance_meters": 0},
+        {"target_distance_meters": True},
+        {"target_duration_seconds": True},
+        {"target_distnace_meters": 10_000},
+    ],
+)
+def test_validate_endpoint_rejects_invalid_request(
+    invalid_override: dict[str, object],
+) -> None:
     response = TestClient(create_app()).post(
         "/api/v1/planning/validate",
-        json={**minimal_payload(), "target_distance_meters": 0},
+        json={**minimal_payload(), **invalid_override},
     )
     assert response.status_code == 422
