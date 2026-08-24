@@ -279,3 +279,41 @@ async def test_timeout_is_controlled_and_not_cached() -> None:
     finally:
         await client.aclose()
     assert calls == 2
+
+
+@pytest.mark.parametrize(
+    ("remark", "error"),
+    [
+        (
+            "runtime error: Query timed out in query at line 1 after 20 seconds.",
+            RouteProviderTimeoutError,
+        ),
+        (
+            "runtime error: Query run out of memory using about 2048 MB of RAM.",
+            RouteProviderTemporaryError,
+        ),
+    ],
+)
+@sync_test
+async def test_runtime_remark_is_rejected_and_not_cached(remark, error) -> None:
+    calls = 0
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        return httpx.Response(
+            200,
+            json={
+                "elements": payload()["elements"],
+                "remark": remark,
+            },
+        )
+
+    instance, client = provider(handler)
+    try:
+        for _ in range(2):
+            with pytest.raises(error):
+                await instance.discover(request())
+    finally:
+        await client.aclose()
+    assert calls == 2

@@ -205,9 +205,18 @@ def build_overpass_query(bounds: BoundingBox, activity: ActivityKind) -> str:
 def parse_overpass_response(
     payload: object, activity: ActivityKind
 ) -> list[TrailFeature]:
-    if not isinstance(payload, Mapping) or not isinstance(
-        payload.get("elements"), list
-    ):
+    if not isinstance(payload, Mapping):
+        raise RouteProviderMalformedResponseError
+    remark = payload.get("remark")
+    if remark is not None:
+        if not isinstance(remark, str):
+            raise RouteProviderMalformedResponseError
+        if remark.strip():
+            normalized_remark = remark.casefold()
+            if "timed out" in normalized_remark or "timeout" in normalized_remark:
+                raise RouteProviderTimeoutError
+            raise RouteProviderTemporaryError
+    if not isinstance(payload.get("elements"), list):
         raise RouteProviderMalformedResponseError
     elements = payload["elements"]
     memberships: dict[int, list[NamedRouteReference]] = {}
