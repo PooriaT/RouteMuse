@@ -31,6 +31,31 @@ RouteMuse owns the vocabulary used by the rest of the application: `ActivityKind
 
 **Geospatial and routing providers.** External systems own factual trail and route information. Discovery accepts a bounded `RouteDiscoveryRequest` and returns factual `TrailFeature` values; a discovered way or named-route relation is not a generated candidate. Routing accepts the narrower `RoutingRequest`, in either waypoint or seeded round-trip mode, and returns `RouteCandidate`. RouteMuse orchestration will later translate product-level `RoutePlanningRequest` preferences into those provider inputs. Adapters normalize geometry, distance, elevation, surface, way type, access, technical distributions, and confidence without leaking raw provider payloads.
 
+The first discovery adapter uses OpenStreetMap's Overpass API. Walking, running,
+trail-running, and hiking queries select pedestrian/trail way classes and
+designated foot infrastructure; cycling queries select cycleway, track, path,
+useful residential/service links, and designated bicycle infrastructure. The
+adapter preserves access tags as descriptive facts rather than making feasibility
+decisions. It also attaches hiking, foot, bicycle, and MTB relation metadata to
+member ways instead of turning relations into candidates.
+
+Every Overpass query contains WGS84 south/west/north/east bounds. Requested radii
+are capped at 25 km; supplied boxes wider or taller than 50 km are deterministically
+replaced by a 25 km-radius box around the planning-area center. Way-node ordering is
+preserved in canonical GeoJSON. Invalid individual elements are logged and skipped.
+The current feature contract maps name/ref fallback, highway, surface, tracktype,
+smoothness, `sac_scale`, `mtb:scale`, bicycle, foot, and access facts. Provenance
+retains OSM way/relation IDs, contributor attribution, and the copyright/ODbL URL.
+
+Each adapter instance serializes calls with `asyncio.Lock`. Successful normalized
+responses use a process-local 64-entry, five-minute monotonic-TTL cache keyed by
+normalized bounds, activity, and query schema version. This is an optimization,
+not durable correctness state; errors are never cached. Timeouts, 429 responses
+(including numeric `Retry-After`), 5xx responses, invalid configuration/query
+responses, and malformed payloads become controlled provider errors without raw
+bodies. Overpass discovers facts only: it neither persists trails nor generates
+routes.
+
 All routed paths use RouteMuse's `GeoJsonLineString`, whose positions are explicitly `[longitude, latitude]` or `[longitude, latitude, elevation_meters]`. Provider-backed features and candidates require one or more `ProviderProvenance` entries. Each entry retains a provider identity, non-empty attribution, source identifiers, and an optional provider request identifier, allowing discovery and routing facts from multiple sources to coexist. Adapters—not orchestration or scoring—declare provider-specific attribution.
 
 Candidate `data_confidence` describes provider/data quality. The optional recommendation fields are a separate, downstream RouteMuse concern and providers must leave them unset. Surface, way-type, and technical facts use measured/proportional breakdowns rather than raw response objects. Optional generation provenance reserves the algorithm version, requested distance, seed, and point count needed for future reproducibility; this contract does not generate them.

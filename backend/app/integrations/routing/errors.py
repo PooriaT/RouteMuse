@@ -21,7 +21,8 @@ class RouteProviderTimeoutError(RouteProviderError):
 
 
 class RouteProviderRateLimitError(RouteProviderError):
-    def __init__(self) -> None:
+    def __init__(self, retry_after_seconds: int | None = None) -> None:
+        self.retry_after_seconds = retry_after_seconds
         super().__init__("The route provider rate limit was reached")
 
 
