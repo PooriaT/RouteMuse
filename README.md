@@ -50,7 +50,7 @@ This starts Next.js and FastAPI together through the frontend's `concurrently` c
 
 ## Configuration
 
-Active variables are `DATABASE_URL`, `CORS_ORIGINS`, `FRONTEND_URL`, `NEXT_PUBLIC_API_BASE_URL`, `STRAVA_CLIENT_ID`, `STRAVA_CLIENT_SECRET`, `STRAVA_REDIRECT_URI`, and `STRAVA_TOKEN_ENCRYPTION_KEY`. `DATABASE_URL` is the sole database connection setting and is used by both the application and Alembic. `FRONTEND_URL` is the trusted planner URL the backend redirects to after successful Strava authorization. The backend and Alembic read the root `.env`; Next.js reads its process environment and optional `frontend/.env.local`. The default URLs work without extra frontend configuration. To override the API URL, put `NEXT_PUBLIC_API_BASE_URL=...` in `frontend/.env.local` or export it before `make dev`.
+Active variables are `DATABASE_URL`, `CORS_ORIGINS`, `FRONTEND_URL`, `NEXT_PUBLIC_API_BASE_URL`, `STRAVA_CLIENT_ID`, `STRAVA_CLIENT_SECRET`, `STRAVA_REDIRECT_URI`, `STRAVA_TOKEN_ENCRYPTION_KEY`, and `OPENROUTESERVICE_API_KEY`. `DATABASE_URL` is the sole database connection setting and is used by both the application and Alembic. `FRONTEND_URL` is the trusted planner URL the backend redirects to after successful Strava authorization. The backend and Alembic read the root `.env`; Next.js reads its process environment and optional `frontend/.env.local`. The default URLs work without extra frontend configuration. To override the API URL, put `NEXT_PUBLIC_API_BASE_URL=...` in `frontend/.env.local` or export it before `make dev`.
 
 To configure Strava, create an API application in Strava's developer settings and register the callback domain for the host used by `STRAVA_REDIRECT_URI`. For local development, the example callback is `http://localhost:8000/api/v1/strava/callback`; the configured redirect URI must use that callback route and a host accepted by the Strava application. Copy the client ID and client secret into the local `.env`, then generate a Fernet key for `STRAVA_TOKEN_ENCRYPTION_KEY` from the backend directory:
 
@@ -60,6 +60,12 @@ poetry run python -c "from cryptography.fernet import Fernet; print(Fernet.gener
 ```
 
 Keep that key stable for the lifetime of stored connections. Never commit the client secret, encryption key, or local environment files.
+
+### Location search
+
+Set `OPENROUTESERVICE_API_KEY` in the root `.env` to enable location search. The credential is read only by FastAPI and must never be put in a `NEXT_PUBLIC_` variable. It is validated lazily when `GET /api/v1/planning-areas/search?q=North%20Vancouver` is called, so missing geocoding configuration does not prevent startup, health checks, Strava, or the athlete profile from working.
+
+The endpoint accepts a RouteMuse search query and bounded result limit rather than proxying provider parameters. OpenRouteService/Pelias features are reduced at the integration boundary to provider-independent `PlanningArea` values: coordinates, display name, optional supplied bounds, provider identity, and attribution. Attribution is retained and displayed with the selection. Raw responses and planning areas are not persisted. Geocoding is implemented, but route discovery and generation are not.
 
 Strava configuration is validated only when a Strava endpoint is invoked, so an unconfigured provider does not prevent `/health` from starting. Begin authorization by navigating the browser to `GET /api/v1/strava/connect`. Connection state is available from `GET /api/v1/strava/status`, and `POST /api/v1/strava/disconnect` revokes the provider credential before deleting it locally.
 
@@ -115,7 +121,7 @@ runs, so it survives page reloads and period changes. Planning controls remain
 disabled because profile presentation does not yet implement route selection or
 recommendation behavior.
 
-`.env.example` also documents secret-free placeholders for future Ollama and openrouteservice adapters. Those placeholders are not used yet, and Ollama is not launched or downloaded by the application.
+`.env.example` documents secret-free geocoding configuration and future Ollama settings. Ollama is not launched or downloaded by the application.
 
 ## Commands
 

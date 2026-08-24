@@ -3,6 +3,7 @@ from typing import Protocol
 
 from app.domain.activities import Activity
 from app.domain.athlete_profile import AthleteProfile
+from app.domain.planning_areas import PlanningArea
 from app.domain.recommendations import RecommendationExplanation
 from app.domain.routes import RouteCandidate
 
@@ -12,7 +13,7 @@ class ActivityProvider(Protocol):
 
 
 class GeocodingProvider(Protocol):
-    async def geocode(self, query: str) -> tuple[float, float] | None: ...
+    async def search(self, query: str, *, limit: int = 5) -> list[PlanningArea]: ...
 
 
 class RouteDiscoveryProvider(Protocol):
