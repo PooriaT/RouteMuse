@@ -10,7 +10,7 @@ const DEBOUNCE_MILLISECONDS = 300;
 
 type LocationSearchProps = {
   selected: PlanningArea | null;
-  onSelect: (area: PlanningArea) => void;
+  onSelect: (area: PlanningArea | null) => void;
 };
 
 export function LocationSearch({ selected, onSelect }: LocationSearchProps) {
@@ -22,6 +22,11 @@ export function LocationSearch({ selected, onSelect }: LocationSearchProps) {
   useEffect(() => {
     const trimmed = query.trim();
     const sequence = ++requestSequence.current;
+    if (selected && query === selected.display_name) {
+      setResults([]);
+      setStatus("idle");
+      return;
+    }
     if (trimmed.length < MINIMUM_QUERY_LENGTH) {
       setResults([]);
       setStatus("idle");
@@ -49,7 +54,7 @@ export function LocationSearch({ selected, onSelect }: LocationSearchProps) {
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [query]);
+  }, [query, selected]);
 
   return (
     <div className="md:col-span-2">
@@ -59,7 +64,13 @@ export function LocationSearch({ selected, onSelect }: LocationSearchProps) {
         type="search"
         placeholder="Area or location"
         value={query}
-        onChange={(event) => setQuery(event.target.value)}
+        onChange={(event) => {
+          const nextQuery = event.target.value;
+          if (selected && nextQuery !== selected.display_name) {
+            onSelect(null);
+          }
+          setQuery(nextQuery);
+        }}
       />
       <div aria-live="polite" className="mt-2 text-sm text-slate-600">
         {status === "loading" && <p>Searching locations…</p>}

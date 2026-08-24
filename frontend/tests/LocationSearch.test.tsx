@@ -54,8 +54,21 @@ describe("LocationSearch", () => {
     fireEvent.click(screen.getByRole("button", { name: area.display_name }));
     expect(onSelect).toHaveBeenCalledWith(area);
     view.rerender(<LocationSearch selected={area} onSelect={onSelect} />);
+    await act(() => vi.advanceTimersByTimeAsync(300));
+    expect(api.searchPlanningAreas).toHaveBeenCalledTimes(1);
     expect(screen.getByTestId("selected-planning-area")).toHaveTextContent(area.display_name);
     expect(screen.getByTestId("selected-planning-area")).toHaveTextContent(area.source_attribution);
+  });
+
+  it("clears a committed planning area when its search text is edited", () => {
+    const onSelect = vi.fn();
+    render(<LocationSearch selected={area} onSelect={onSelect} />);
+
+    fireEvent.change(screen.getByLabelText("Location"), {
+      target: { value: "A different place" },
+    });
+
+    expect(onSelect).toHaveBeenCalledWith(null);
   });
 
   it("reports no results and provider failures", async () => {
