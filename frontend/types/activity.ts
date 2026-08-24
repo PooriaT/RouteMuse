@@ -1,1 +1,3 @@
-export type ActivityType = { value: string; label: string };
+import type { ActivityKind } from "./athleteProfile";
+
+export type ActivityType = { value: ActivityKind; label: string };

@@ -5,6 +5,7 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { ApiError, api } from "@/lib/api/client";
 import type { ActivityType } from "@/types/activity";
 import type {
+  ActivityKind,
   AthleteProfile,
   AthleteProfileRequest,
 } from "@/types/athleteProfile";
@@ -22,6 +23,11 @@ type PlannerFormProps = {
   activityTypes: ActivityType[];
   activityTypesUnavailable?: boolean;
   initialDateRange?: HistoricalDateRange;
+};
+
+type ActivitySelection = {
+  kind: ActivityKind | null;
+  source: "automatic" | "user";
 };
 
 export function PlannerForm({
@@ -42,6 +48,8 @@ export function PlannerForm({
     useState<AthleteProfileViewStatus>("idle");
   const [profileError, setProfileError] = useState<string | null>(null);
   const [planningArea, setPlanningArea] = useState<PlanningArea | null>(null);
+  const [activitySelection, setActivitySelection] =
+    useState<ActivitySelection>({ kind: null, source: "automatic" });
   const profileRequestSequence = useRef(0);
   const selectedProfileRequest = useRef<AthleteProfileRequest | null>(null);
   const hasInvalidRange = Boolean(
@@ -145,6 +153,39 @@ export function PlannerForm({
     }
   }, [hasValidPeriod, loadSelectedProfile, stravaConnected, timezone]);
 
+  useEffect(() => {
+    if (profileStatus !== "ready" || profile === null) return;
+
+    setActivitySelection((current) => {
+      const selectionIsSupported =
+        current.kind !== null &&
+        activityTypes.some((activityType) => activityType.value === current.kind);
+      if (current.source === "user" && selectionIsSupported) return current;
+
+      const dominantKind = profile.dominant_activity?.activity_kind ?? null;
+      const supportedDominant =
+        dominantKind !== null &&
+        activityTypes.some((activityType) => activityType.value === dominantKind)
+          ? dominantKind
+          : null;
+      if (
+        current.kind === supportedDominant &&
+        current.source === "automatic"
+      ) {
+        return current;
+      }
+      return { kind: supportedDominant, source: "automatic" };
+    });
+  }, [activityTypes, profile, profileStatus]);
+
+  const handleActivityChange = (value: string) => {
+    const selectedKind = activityTypes.find(
+      (activityType) => activityType.value === value,
+    )?.value;
+    if (!selectedKind) return;
+    setActivitySelection({ kind: selectedKind, source: "user" });
+  };
+
   return (
     <main className="mx-auto max-w-5xl p-6 md:p-10">
       <header className="mb-8">
@@ -216,19 +257,39 @@ export function PlannerForm({
         <fieldset aria-describedby="preferences-status" className="grid gap-4 md:grid-cols-2">
           <legend className="sr-only">Route planning preferences</legend>
           <LocationSearch selected={planningArea} onSelect={setPlanningArea} />
-          <label className="opacity-60">
-            Activity type
-            <select disabled defaultValue="">
-              <option value="">Select after connecting</option>
+          <div>
+            <label htmlFor="activity-type">Activity type</label>
+            <select
+              id="activity-type"
+              aria-describedby={
+                activitySelection.source === "automatic" &&
+                activitySelection.kind !== null
+                  ? "activity-default-context"
+                  : undefined
+              }
+              disabled={activityTypes.length === 0}
+              value={activitySelection.kind ?? ""}
+              onChange={(event) => handleActivityChange(event.target.value)}
+            >
+              <option value="">Choose an activity</option>
               {activityTypes.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
             </select>
-          </label>
+            {activitySelection.source === "automatic" &&
+              activitySelection.kind !== null && (
+                <span
+                  id="activity-default-context"
+                  className="text-xs font-normal text-slate-500"
+                >
+                  Suggested from your athlete profile
+                </span>
+              )}
+          </div>
           <label className="opacity-60">Target distance (km), optional<input disabled type="number" min="0" /></label>
           <label className="opacity-60">Target duration (minutes), optional<input disabled type="number" min="0" /></label>
           <label className="opacity-60">Desired challenge, optional<select disabled defaultValue=""><option value="">Any challenge</option><option value="easy">Easy</option><option value="moderate">Moderate</option><option value="hard">Hard</option></select></label>
           <label className="opacity-60">Route shape, optional<select disabled defaultValue=""><option value="">Any route shape</option><option value="loop">Loop</option><option value="out-and-back">Out-and-back</option><option value="point-to-point">Point-to-point</option></select></label>
         </fieldset>
-        <p id="preferences-status" className="mt-4 text-sm text-slate-500">Choose a planning area now. Other route planning controls remain disabled until route generation is implemented.</p>
+        <p id="preferences-status" className="mt-4 text-sm text-slate-500">Choose a planning area and activity type now. Other route planning controls remain disabled until route generation is implemented.</p>
         {activityTypesUnavailable && (
           <p role="status" className="mt-2 text-sm text-amber-700">Activity types are temporarily unavailable. Try again when the RouteMuse API is running.</p>
         )}
