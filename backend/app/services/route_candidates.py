@@ -1,7 +1,7 @@
 """Deterministic, provider-neutral orchestration of factual route candidates."""
 
 from hashlib import sha256
-from math import floor, hypot
+from math import atan2, cos, degrees, hypot, radians, sin
 from uuid import NAMESPACE_URL, uuid5
 
 from app.domain.planning import RoutePlanningRequest
@@ -173,8 +173,19 @@ async def generate_route_candidates(
 
 def geometries_are_similar(first: GeoJsonLineString, second: GeoJsonLineString) -> bool:
     """Compare direction-independent, tolerance-buffered sampled spatial cells."""
-    cells_a = _geometry_cells(first)
-    cells_b = _geometry_cells(second)
+    coordinates = [*first.coordinates, *second.coordinates]
+    reference_latitude = sum(point[1] for point in coordinates) / len(coordinates)
+    # A circular mean supplies a shared, order-independent origin near the route,
+    # including when its longitudes straddle the antimeridian.
+    longitude_radians = [radians(point[0]) for point in coordinates]
+    reference_longitude = degrees(
+        atan2(
+            sum(sin(longitude) for longitude in longitude_radians),
+            sum(cos(longitude) for longitude in longitude_radians),
+        )
+    )
+    cells_a = _geometry_cells(first, reference_latitude, reference_longitude)
+    cells_b = _geometry_cells(second, reference_latitude, reference_longitude)
     union = cells_a | cells_b
     return (
         bool(union)
@@ -182,19 +193,37 @@ def geometries_are_similar(first: GeoJsonLineString, second: GeoJsonLineString) 
     )
 
 
-def _geometry_cells(geometry: GeoJsonLineString) -> set[tuple[int, int]]:
-    coordinates = [(point[0], point[1]) for point in geometry.coordinates]
-    projected = [(lon * 111_320.0, lat * 110_540.0) for lon, lat in coordinates]
+def _geometry_cells(
+    geometry: GeoJsonLineString,
+    reference_latitude: float,
+    reference_longitude: float,
+) -> set[tuple[int, int]]:
+    longitude_scale = 111_320.0 * cos(radians(reference_latitude))
+    projected = [
+        (
+            _wrapped_longitude_delta(point[0], reference_longitude)
+            * longitude_scale,
+            (point[1] - reference_latitude) * 110_540.0,
+        )
+        for point in geometry.coordinates
+    ]
     sampled = _resample(projected)
     cells: set[tuple[int, int]] = set()
     for x, y in sampled:
-        cell_x = floor(x / GEOMETRY_CELL_SIZE_METERS)
-        cell_y = floor(y / GEOMETRY_CELL_SIZE_METERS)
+        # Nearest-cell assignment avoids splitting two close routes merely because
+        # the shared local origin lies between them on a cell boundary.
+        cell_x = round(x / GEOMETRY_CELL_SIZE_METERS)
+        cell_y = round(y / GEOMETRY_CELL_SIZE_METERS)
         # A one-cell halo makes the comparison robust near cell boundaries.
         cells.update(
             (cell_x + dx, cell_y + dy) for dx in (-1, 0, 1) for dy in (-1, 0, 1)
         )
     return cells
+
+
+def _wrapped_longitude_delta(longitude: float, reference: float) -> float:
+    """Return the shortest signed longitude delta, unwrapping at ±180 degrees."""
+    return (longitude - reference + 180.0) % 360.0 - 180.0
 
 
 def _resample(points: list[tuple[float, float]]) -> list[tuple[float, float]]:

@@ -165,8 +165,9 @@ eight sequential provider attempts using stable SHA-256-derived seeds, the repea
 target factors `1.00, 0.90, 1.10, 0.95, 1.05`, and four round-trip points. Targets
 above the documented 100 km hosted-provider bound are skipped rather than sent.
 
-Routes are resampled every 50 metres into 40-metre spatial cells with a one-cell
-tolerance halo. A direction-independent Jaccard overlap of at least 0.80 is a
+Routes are projected around a shared local latitude with antimeridian unwrapping,
+then resampled every 50 metres into 40-metre spatial cells with a one-cell tolerance
+halo. A direction-independent Jaccard overlap of at least 0.80 is a
 duplicate. Exhaustion after at least one unique route returns a partial result and
 warning; zero routes is a controlled error. Rate limits, credentials/configuration,
 and malformed responses stop generation immediately. No discovery provider, LLM,

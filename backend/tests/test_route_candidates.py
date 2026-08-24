@@ -133,6 +133,52 @@ def test_geometry_similarity_tolerates_direction_and_small_changes() -> None:
     assert ROUTE_SIMILARITY_THRESHOLD == 0.8
 
 
+def test_geometry_similarity_uses_high_latitude_longitude_scale() -> None:
+    longitude_delta_for_ten_meters = 10.0 / (
+        111_320.0 * 0.17364817766693041  # cos(80 degrees)
+    )
+    original = GeoJsonLineString(
+        coordinates=[
+            [20.0, 80.0],
+            [20.01, 80.0],
+            [20.01, 80.01],
+            [20.0, 80.01],
+            [20.0, 80.0],
+        ]
+    )
+    shifted = GeoJsonLineString(
+        coordinates=[
+            [point[0] + longitude_delta_for_ten_meters, point[1]]
+            for point in original.coordinates
+        ]
+    )
+
+    assert geometries_are_similar(original, shifted)
+
+
+def test_geometry_similarity_unwraps_antimeridian_routes() -> None:
+    original = GeoJsonLineString(
+        coordinates=[
+            [179.9998, 10.0],
+            [-179.9998, 10.0],
+            [-179.9998, 10.001],
+            [179.9998, 10.001],
+            [179.9998, 10.0],
+        ]
+    )
+    slightly_shifted = GeoJsonLineString(
+        coordinates=[
+            [179.99981, 10.0],
+            [-179.99979, 10.0],
+            [-179.99979, 10.001],
+            [179.99981, 10.001],
+            [179.99981, 10.0],
+        ]
+    )
+
+    assert geometries_are_similar(original, slightly_shifted)
+
+
 def test_generates_desired_ordered_distinct_candidates_with_provenance() -> None:
     provider = FakeProvider(
         [candidate(loop(offset=index * 0.03), scored=True) for index in range(4)]

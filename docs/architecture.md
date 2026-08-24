@@ -75,8 +75,9 @@ Candidate `data_confidence` describes provider/data quality. The optional recomm
 
 Round-trip candidate generation targets four distinct results in at most eight
 sequential calls. Versioned SHA-256 inputs yield durable seeds; a fixed target-factor
-sequence and point count make requests reproducible. Dependency-free resampling and
-tolerance-buffered spatial-cell Jaccard comparison reject direction-reversed or
+sequence and point count make requests reproducible. A dependency-free local metric
+projection scales longitude by route latitude and unwraps the antimeridian before
+tolerance-buffered spatial-cell Jaccard comparison rejects direction-reversed or
 nearly identical geometry at a `0.80` threshold. Partial nonempty sets are valid and
 warned; zero results and unsupported non-loop modes are controlled outcomes. The
 service consumes `RoutingProvider` and never constructs an ORS HTTP client or asks

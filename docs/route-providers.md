@@ -73,8 +73,9 @@ version, normalized start, activity, and requested distance supplies stable per-
 `0.90`, `1.10`, `0.95`, and `1.05`; values above the 100 km hosted ORS request bound
 are not sent.
 
-Geometry is resampled at 50-metre intervals, assigned to 40-metre cells plus a
-one-cell tolerance halo, and compared as direction-independent cell sets. Jaccard
+Geometry is locally projected using its latitude and an antimeridian-safe shared
+longitude origin, resampled at 50-metre intervals, assigned to 40-metre cells plus
+a one-cell tolerance halo, and compared as direction-independent cell sets. Jaccard
 overlap at or above `0.80` is a duplicate. No-route and duplicate attempts continue
 within the bound. A nonempty shortfall returns candidates with a controlled warning;
 a zero result is a controlled error. Rate limits, authentication/configuration, and
