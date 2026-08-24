@@ -123,6 +123,37 @@ def test_oversized_bounds_and_radius_are_clamped_deterministically() -> None:
     )
 
 
+def test_full_longitude_box_is_clamped_despite_narrow_latitude_span() -> None:
+    worldwide_strip = request().model_copy(
+        update={
+            "search_bounds": BoundingBox(
+                south=49.24, west=-180, north=49.26, east=180
+            )
+        }
+    )
+
+    normalized = normalize_discovery_bounds(worldwide_strip)
+
+    assert normalized.west != -180
+    assert normalized.east != 180
+    assert normalized.west < request().planning_area.longitude < normalized.east
+
+
+def test_narrow_antimeridian_crossing_box_is_not_mistaken_for_full_world() -> None:
+    crossing = request().model_copy(
+        update={
+            "planning_area": request().planning_area.model_copy(
+                update={"longitude": 179.0}
+            ),
+            "search_bounds": BoundingBox(
+                south=49.24, west=179.9, north=49.26, east=-179.9
+            ),
+        }
+    )
+
+    assert normalize_discovery_bounds(crossing) == crossing.search_bounds
+
+
 @sync_test
 async def test_parses_way_tags_geometry_relation_and_attribution() -> None:
     seen: list[httpx.Request] = []

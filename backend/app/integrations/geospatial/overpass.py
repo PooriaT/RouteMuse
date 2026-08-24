@@ -145,7 +145,10 @@ def normalize_discovery_bounds(request: RouteDiscoveryRequest) -> BoundingBox:
     center_lat = area.latitude
     center_lon = area.longitude
     lat_span_m = (supplied.north - supplied.south) * EARTH_METERS_PER_DEGREE
-    lon_delta = (supplied.east - supplied.west) % 360
+    raw_lon_delta = supplied.east - supplied.west
+    # Preserve an explicit [-180, 180] full-world span. Only add 360 for a
+    # genuine antimeridian-crossing box whose east longitude is less than west.
+    lon_delta = raw_lon_delta if raw_lon_delta >= 0 else raw_lon_delta + 360
     lon_span_m = lon_delta * EARTH_METERS_PER_DEGREE * max(
         math.cos(math.radians(center_lat)), 0.01
     )
