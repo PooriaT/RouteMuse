@@ -8,7 +8,8 @@ flowchart TD
   AP --> N[Normalized activities]
   N --> A[Athlete profile]
   A --> RC[Route candidates]
-  L[Location + preferences] --> GP[Geospatial / routing providers]
+  L[Planning inputs] --> PR[Canonical RoutePlanningRequest]
+  PR --> GP[Future geospatial / routing providers]
   GP -->|grounded route facts| RC
   RC --> D[Deterministic scoring]
   D --> O[Ollama explanation]
@@ -17,7 +18,7 @@ flowchart TD
 
 ## RouteMuse domain
 
-RouteMuse owns the vocabulary used by the rest of the application: `ActivityKind`, normalized activities, `AthleteProfile`, `RouteCandidate`, and recommendation concepts. These models use canonical meters and seconds and must not mirror a provider payload merely for convenience. Presentation code owns user-facing unit conversion.
+RouteMuse owns the vocabulary used by the rest of the application: `ActivityKind`, normalized activities, `AthleteProfile`, `RoutePlanningRequest`, `RouteCandidate`, and recommendation concepts. These models use canonical meters and seconds and must not mirror a provider payload merely for convenience. Presentation code owns user-facing unit conversion. The planning request is documented in [Canonical route-planning request](planning.md).
 
 ## Integration boundaries
 
