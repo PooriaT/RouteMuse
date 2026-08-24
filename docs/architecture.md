@@ -31,6 +31,15 @@ RouteMuse owns the vocabulary used by the rest of the application: `ActivityKind
 
 **Geospatial and routing providers.** External systems own factual trail and route information. Discovery accepts a bounded `RouteDiscoveryRequest` and returns factual `TrailFeature` values; a discovered way or named-route relation is not a generated candidate. Routing accepts the narrower `RoutingRequest`, in either waypoint or seeded round-trip mode, and returns `RouteCandidate`. RouteMuse orchestration will later translate product-level `RoutePlanningRequest` preferences into those provider inputs. Adapters normalize geometry, distance, elevation, surface, way type, access, technical distributions, and confidence without leaking raw provider payloads.
 
+The first routing adapter uses OpenRouteService Directions GeoJSON and the same
+`OPENROUTESERVICE_API_KEY` configuration as geocoding. Its explicit activity map
+supports walking (`foot-walking`) and hiking (`foot-hiking`) only; running, trail
+running, cycling, and skiing remain unsupported. Waypoint and seeded round-trip
+translation, ORS option names, authentication, and extra-information enums remain
+inside the adapter. Provider summary distance/duration are authoritative,
+elevation is nullable, and warnings plus response attribution are retained as ORS
+provenance. This boundary performs no athlete-fit logic, scoring, or ranking.
+
 The first discovery adapter uses OpenStreetMap's Overpass API. Walking, running,
 trail-running, and hiking queries select pedestrian/trail way classes and
 designated foot infrastructure; cycling queries select cycleway, track, path,

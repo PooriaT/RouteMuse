@@ -15,6 +15,16 @@ class UnsupportedActivityError(RouteProviderError):
         super().__init__("The provider does not support this activity")
 
 
+class ProviderAuthenticationError(RouteProviderError):
+    def __init__(self) -> None:
+        super().__init__("The route provider rejected its credentials")
+
+
+class ProviderInvalidRequestError(RouteProviderError):
+    def __init__(self) -> None:
+        super().__init__("The route provider rejected the routing request")
+
+
 class RouteProviderTimeoutError(RouteProviderError):
     def __init__(self) -> None:
         super().__init__("The route provider timed out")

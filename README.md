@@ -1,6 +1,6 @@
 # RouteMuse
 
-RouteMuse is a personalized outdoor route discovery and planning application. This repository establishes domain boundaries and a runnable planner shell. Its backend supports a secure Strava account connection, historical activity synchronization, and deterministic athlete-profile analysis, while routing, scoring, and LLM features remain intentionally unimplemented.
+RouteMuse is a personalized outdoor route discovery and planning application. This repository establishes domain boundaries and a runnable planner shell. Its backend supports a secure Strava account connection, historical activity synchronization, and deterministic athlete-profile analysis, and provider-grounded walking and hiking routing, while scoring/ranking and LLM features remain intentionally unimplemented.
 
 ## Architecture
 
@@ -65,7 +65,7 @@ Keep that key stable for the lifetime of stored connections. Never commit the cl
 
 Set `OPENROUTESERVICE_API_KEY` in the root `.env` to enable location search. The credential is read only by FastAPI and must never be put in a `NEXT_PUBLIC_` variable. It is validated lazily when `GET /api/v1/planning-areas/search?q=North%20Vancouver` is called, so missing geocoding configuration does not prevent startup, health checks, Strava, or the athlete profile from working.
 
-The endpoint accepts a RouteMuse search query and bounded result limit rather than proxying provider parameters. OpenRouteService/Pelias features are reduced at the integration boundary to provider-independent `PlanningArea` values: coordinates, display name, optional supplied bounds, provider identity, and attribution. Attribution is retained and displayed with the selection. Raw responses and planning areas are not persisted. Geocoding is implemented, but route discovery and generation are not.
+The endpoint accepts a RouteMuse search query and bounded result limit rather than proxying provider parameters. OpenRouteService/Pelias features are reduced at the integration boundary to provider-independent `PlanningArea` values: coordinates, display name, optional supplied bounds, provider identity, and attribution. Attribution is retained and displayed with the selection. Raw responses and planning areas are not persisted. Geocoding and the provider adapter for walking/hiking route generation are implemented; candidate orchestration is not.
 
 Strava configuration is validated only when a Strava endpoint is invoked, so an unconfigured provider does not prevent `/health` from starting. Begin authorization by navigating the browser to `GET /api/v1/strava/connect`. Connection state is available from `GET /api/v1/strava/status`, and `POST /api/v1/strava/disconnect` revokes the provider credential before deleting it locally.
 
@@ -141,6 +141,21 @@ avoid parallel bursts against shared infrastructure. Returned features retain
 `© OpenStreetMap contributors` attribution and the
 [OpenStreetMap copyright/ODbL reference](https://www.openstreetmap.org/copyright).
 
+## Walking and hiking routing
+
+The OpenRouteService Directions adapter maps RouteMuse `WALKING` to
+`foot-walking` and `HIKING` to `foot-hiking`. Running and trail running are not
+approximated or mapped, and neither are cycling or skiing activities. It accepts
+typed waypoint or deterministic round-trip requests and reuses the server-only
+`OPENROUTESERVICE_API_KEY` configuration used by geocoding.
+
+Directions GeoJSON is normalized into canonical route geometry, actual provider
+distance and duration, nullable ascent/descent, descriptive surface, way-type,
+steepness and trail-difficulty breakdowns, warnings, and OpenRouteService
+provenance/attribution. These facts remain provider-grounded: the adapter neither
+recomputes distance nor calls a separate elevation service. Candidate ranking and
+recommendation scoring are not implemented.
+
 ## Commands
 
 | Command | Purpose |
@@ -161,4 +176,4 @@ poetry run uvicorn app.main:app --reload
 
 ## Current limitations and next integrations
 
-This scaffold has no RouteMuse user authentication, route discovery/generation, route difficulty scoring, recommendation ranking, GPX, or Ollama inference. Planning inputs can be prepared and schema-validated, but recommendations remain empty. Strava OAuth credentials are connected and encrypted server-side; historical activities can be synchronized idempotently, and exact `sport_type` values are normalized at the integration boundary while unsupported values remain identifiable. Deterministic athlete analysis is implemented and presented from persisted history. Subsequent work can add factual geospatial adapters and deterministic candidate scoring before any LLM explanation layer.
+This scaffold has no RouteMuse user authentication, candidate orchestration, route difficulty scoring, recommendation ranking, GPX, or Ollama inference. Planning inputs can be prepared and schema-validated, but recommendations remain empty. Strava OAuth credentials are connected and encrypted server-side; historical activities can be synchronized idempotently, and exact `sport_type` values are normalized at the integration boundary while unsupported values remain identifiable. Deterministic athlete analysis is implemented and presented from persisted history. Subsequent work can add factual geospatial adapters and deterministic candidate scoring before any LLM explanation layer.
