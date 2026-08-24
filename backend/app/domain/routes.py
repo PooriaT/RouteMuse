@@ -11,9 +11,9 @@ from app.domain.activities import ActivityKind
 from app.domain.planning_areas import BoundingBox, PlanningArea
 
 FiniteFloat = Annotated[float, Field(strict=True, allow_inf_nan=False)]
-GeoJsonCoordinate = tuple[FiniteFloat, FiniteFloat] | tuple[
-    FiniteFloat, FiniteFloat, FiniteFloat
-]
+GeoJsonCoordinate = (
+    tuple[FiniteFloat, FiniteFloat] | tuple[FiniteFloat, FiniteFloat, FiniteFloat]
+)
 
 
 def _validate_coordinate(coordinate: GeoJsonCoordinate) -> None:
@@ -107,11 +107,23 @@ class CandidateGenerationProvenance(CanonicalModel):
     """Inputs needed to reproduce deterministic round-trip generation later."""
 
     algorithm_version: str = Field(min_length=1)
-    requested_distance_meters: float = Field(
+    requested_distance_meters: float = Field(gt=0, allow_inf_nan=False, strict=True)
+    effective_target_distance_meters: float = Field(
         gt=0, allow_inf_nan=False, strict=True
     )
     seed: int = Field(ge=0, strict=True)
     round_trip_points: int = Field(gt=0, strict=True)
+    attempt_index: int = Field(ge=0, strict=True)
+
+
+class CandidateGenerationResult(CanonicalModel):
+    """Ordered factual candidates and bounded-generation outcome metadata."""
+
+    candidates: list["RouteCandidate"]
+    desired_candidates: int = Field(gt=0, strict=True)
+    attempts_made: int = Field(ge=0, strict=True)
+    max_attempts: int = Field(gt=0, strict=True)
+    warnings: list[str] = Field(default_factory=list)
 
 
 class TrailFeature(CanonicalModel):
@@ -155,9 +167,7 @@ class RouteDiscoveryRequest(CanonicalModel):
 
 
 class RoundTripParameters(CanonicalModel):
-    target_distance_meters: float = Field(
-        gt=0, allow_inf_nan=False, strict=True
-    )
+    target_distance_meters: float = Field(gt=0, allow_inf_nan=False, strict=True)
     points: int = Field(gt=0, strict=True)
     seed: int = Field(ge=0, strict=True)
 

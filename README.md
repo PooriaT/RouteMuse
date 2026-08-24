@@ -65,7 +65,7 @@ Keep that key stable for the lifetime of stored connections. Never commit the cl
 
 Set `OPENROUTESERVICE_API_KEY` in the root `.env` to enable location search. The credential is read only by FastAPI and must never be put in a `NEXT_PUBLIC_` variable. It is validated lazily when `GET /api/v1/planning-areas/search?q=North%20Vancouver` is called, so missing geocoding configuration does not prevent startup, health checks, Strava, or the athlete profile from working.
 
-The endpoint accepts a RouteMuse search query and bounded result limit rather than proxying provider parameters. OpenRouteService/Pelias features are reduced at the integration boundary to provider-independent `PlanningArea` values: coordinates, display name, optional supplied bounds, provider identity, and attribution. Attribution is retained and displayed with the selection. Raw responses and planning areas are not persisted. Geocoding and the provider adapter for walking/hiking route generation are implemented; candidate orchestration is not.
+The endpoint accepts a RouteMuse search query and bounded result limit rather than proxying provider parameters. OpenRouteService/Pelias features are reduced at the integration boundary to provider-independent `PlanningArea` values: coordinates, display name, optional supplied bounds, provider identity, and attribution. Attribution is retained and displayed with the selection. Raw responses and planning areas are not persisted. Geocoding, factual routing adapters, and deterministic round-trip candidate orchestration are implemented.
 
 Strava configuration is validated only when a Strava endpoint is invoked, so an unconfigured provider does not prevent `/health` from starting. Begin authorization by navigating the browser to `GET /api/v1/strava/connect`. Connection state is available from `GET /api/v1/strava/status`, and `POST /api/v1/strava/disconnect` revokes the provider credential before deleting it locally.
 
@@ -121,8 +121,8 @@ runs, so it survives page reloads and period changes. The planner then selects a
 normalized planning area, chooses or overrides the RouteMuse activity type, and
 optionally accepts effort, route-shape, and novelty preferences. Display units are
 converted to canonical meters and seconds before `POST /api/v1/planning/validate`.
-Empty overrides remain null for future profile-driven inference. Validation does not
-generate a route; provider-backed route discovery remains future work.
+Empty overrides remain null for future profile-driven inference. Validation itself does
+not generate a route; a resolved distance can be submitted to the factual candidate endpoint.
 
 `.env.example` documents secret-free geocoding configuration and future Ollama settings. Ollama is not launched or downloaded by the application.
 
@@ -143,9 +143,9 @@ avoid parallel bursts against shared infrastructure. Returned features retain
 
 ## Walking and hiking routing
 
-The OpenRouteService Directions adapter maps RouteMuse `WALKING` to
-`foot-walking` and `HIKING` to `foot-hiking`. Running and trail running are not
-approximated or mapped, and neither are cycling or skiing activities. It accepts
+The OpenRouteService Directions adapter maps walking, hiking, road cycling, gravel
+cycling, and mountain biking to explicit profiles. Running, trail running, and skiing
+are not silently approximated. It accepts
 typed waypoint or deterministic round-trip requests and reuses the server-only
 `OPENROUTESERVICE_API_KEY` configuration used by geocoding.
 
@@ -155,6 +155,23 @@ steepness and trail-difficulty breakdowns, warnings, and OpenRouteService
 provenance/attribution. These facts remain provider-grounded: the adapter neither
 recomputes distance nor calls a separate elevation service. Candidate ranking and
 recommendation scoring are not implemented.
+
+## Deterministic factual candidates
+
+`POST /api/v1/route-candidates` accepts a validated `RoutePlanningRequest` with an
+explicit target distance. It supports null/`LOOP` shape only and returns a typed,
+ordered result containing up to four unique candidates. RouteMuse makes at most
+eight sequential provider attempts using stable SHA-256-derived seeds, the repeating
+target factors `1.00, 0.90, 1.10, 0.95, 1.05`, and four round-trip points. Targets
+above the documented 100 km hosted-provider bound are skipped rather than sent.
+
+Routes are projected around a shared local latitude with antimeridian unwrapping,
+then resampled every 50 metres into 40-metre spatial cells with a one-cell tolerance
+halo. A direction-independent Jaccard overlap of at least 0.80 is a
+duplicate. Exhaustion after at least one unique route returns a partial result and
+warning; zero routes is a controlled error. Rate limits, credentials/configuration,
+and malformed responses stop generation immediately. No discovery provider, LLM,
+ranking, persistence, or frontend map participates in this operation.
 
 ## Commands
 
@@ -176,4 +193,4 @@ poetry run uvicorn app.main:app --reload
 
 ## Current limitations and next integrations
 
-This scaffold has no RouteMuse user authentication, candidate orchestration, route difficulty scoring, recommendation ranking, GPX, or Ollama inference. Planning inputs can be prepared and schema-validated, but recommendations remain empty. Strava OAuth credentials are connected and encrypted server-side; historical activities can be synchronized idempotently, and exact `sport_type` values are normalized at the integration boundary while unsupported values remain identifiable. Deterministic athlete analysis is implemented and presented from persisted history. Subsequent work can add factual geospatial adapters and deterministic candidate scoring before any LLM explanation layer.
+This scaffold has no RouteMuse user authentication, route difficulty scoring, recommendation ranking, frontend map visualization, GPX, or Ollama inference. The backend can generate deterministic factual round-trip candidates, but those candidates remain deliberately unranked and every recommendation score is unset. Strava OAuth credentials are connected and encrypted server-side; historical activities can be synchronized idempotently, and exact `sport_type` values are normalized at the integration boundary while unsupported values remain identifiable. Deterministic athlete analysis is implemented and presented from persisted history. Subsequent work can add factual geospatial adapters and deterministic candidate scoring before any LLM explanation layer.
