@@ -15,9 +15,9 @@ future deterministic scoring
 ```
 
 `RoutePlanningRequest` contains product preferences such as desired challenge and
-novelty. It is never sent directly to a provider. Future orchestration translates
-only relevant values into a bounded `RouteDiscoveryRequest` and a narrow
-`RoutingRequest`.
+novelty. It is never sent directly to a provider. Current RouteMuse orchestration
+translates only the area, activity, resolved target, and loop shape into narrow
+`RoutingRequest` values; discovery remains a separate factual boundary.
 
 Discovery returns `TrailFeature` facts. Routing returns routed candidates and
 supports either two-or-more waypoints or a start plus provider-neutral round-trip
@@ -66,5 +66,19 @@ are deliberately absent from this adapter: richer track-grade facts belong to
 Overpass-discovered `TrailFeature` data and may be combined later with clear
 provenance.
 
-Candidate orchestration, deduplication, scoring, and ranking remain intentionally
-deferred. The routing adapter populates no recommendation scores.
+RouteMuse candidate orchestration is implemented outside the adapter. It requests
+four candidates in at most eight sequential attempts. SHA-256 over the algorithm
+version, normalized start, activity, and requested distance supplies stable per-index
+32-bit seeds. Attempts use four round-trip points and repeat target factors `1.00`,
+`0.90`, `1.10`, `0.95`, and `1.05`; values above the 100 km hosted ORS request bound
+are not sent.
+
+Geometry is resampled at 50-metre intervals, assigned to 40-metre cells plus a
+one-cell tolerance halo, and compared as direction-independent cell sets. Jaccard
+overlap at or above `0.80` is a duplicate. No-route and duplicate attempts continue
+within the bound. A nonempty shortfall returns candidates with a controlled warning;
+a zero result is a controlled error. Rate limits, authentication/configuration, and
+malformed responses stop immediately. Generation provenance records algorithm
+version, requested and effective distance, seed, point count, and attempt index,
+while provider attribution remains separate. Scoring and ranking remain deferred,
+and all recommendation fields stay unset.

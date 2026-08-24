@@ -214,8 +214,10 @@ class OpenRouteServiceRoutingProvider:
             generation = CandidateGenerationProvenance(
                 algorithm_version="openrouteservice-round-trip-v1",
                 requested_distance_meters=request.round_trip.target_distance_meters,
+                effective_target_distance_meters=request.round_trip.target_distance_meters,
                 seed=request.round_trip.seed,
                 round_trip_points=request.round_trip.points,
+                attempt_index=0,
             )
         return RouteCandidate(
             id=uuid4(),
