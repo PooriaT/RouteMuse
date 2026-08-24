@@ -48,3 +48,56 @@ difficulty score without appearing as well understood as a fully described route
 `RouteCandidate.difficulty_score` is populated by the RouteMuse scoring service on
 a copied candidate. Routing and discovery provider adapters continue to return
 facts with all downstream recommendation scores unset.
+
+## Athlete fit (`athlete-fit-v1`)
+
+Athlete fit asks whether candidate facts suit the requested activity, the athlete's
+representative history, current consistency, and explicit preferences. It is not
+intrinsic difficulty, medical readiness, fatigue, or a technical-skill inference.
+Only the profile summary and consistency signals whose `ActivityKind` exactly
+matches the request and candidate are used.
+
+### Targets and challenge anchors
+
+The centralized v1 capability anchors are: **easy → p25**, **moderate → median**,
+**hard → p90**, and **no challenge → median**. No challenge therefore means “use
+my profile,” not hard and not disabled scoring. An explicit requested distance or
+duration takes precedence over its challenge-derived anchor. The reusable pure
+distance resolver applies exactly this precedence. Explicit targets control
+target alignment but do not suppress comparison with demonstrated p90 capability.
+
+Distance, duration (when estimated), elevation (when both sides have it), and
+climbing density (when supported by the existing profile range) are separate,
+explainable components. Missing evidence is omitted rather than converted to zero.
+The implementation reuses profile percentiles and never calculates percentiles or
+uses a historical maximum.
+
+### Asymmetric overshoot behavior
+
+Below a target, fit degrades gently and linearly, losing at most 35%. Above the
+target it loses 35% per target multiple. Above the historical p90, a second smooth
+penalty loses 90% per p90 multiple with a small floor. Consequently, one unit over
+p90 does not cause a discontinuity, while a candidate far beyond representative
+history is strongly penalized. When challenge is explicit and a difficulty
+assessment is available, difficulty alignment to centralized targets (easy 0.25,
+moderate 0.50, hard 0.80) is a small, separate preference signal; difficulty is
+never inverted and treated as capability.
+
+### Consistency, confidence, and unavailable fit
+
+Current consistency remains separate from historical capability. Its evidence
+reports active-week ratio, days since last matching activity, recent weekly moving
+time, and recent-to-baseline moving-time ratio when available. Weak recent support
+matters progressively more for candidates near the high end of p90; it never
+changes the historical ranges and makes no injury, fatigue, or medical claim.
+
+Confidence is RouteMuse **evidence coverage**, not scientific statistical
+confidence: 45% capability sample-size support (full at ten samples per used
+range), 30% usable capability dimensions, 15% matching consistency availability,
+and 10% recent/baseline moving-time comparison availability. Missing duration or
+elevation therefore lowers confidence. If no matching activity summary exists,
+status is `insufficient_history`, score is `null`, and confidence is zero—unknown
+fit is never represented as bad fit. Candidate/request activity mismatch uses
+`unsupported_activity`. Only a scored assessment populates
+`RouteCandidate.athlete_fit_score`; `confidence_score` remains untouched for final
+recommendation orchestration.

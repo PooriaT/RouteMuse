@@ -1,3 +1,4 @@
+from enum import StrEnum
 from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -25,6 +26,37 @@ class RouteDifficultyAssessment(BaseModel):
     score: BoundedScore
     components: list[ScoreComponent]
     evidence_coverage: BoundedScore
+    scoring_version: str
+    warnings: list[str] = Field(default_factory=list)
+
+
+class AthleteFitStatus(StrEnum):
+    """Whether athlete-fit evidence permits a numeric assessment."""
+
+    SCORED = "scored"
+    INSUFFICIENT_HISTORY = "insufficient_history"
+    UNSUPPORTED_ACTIVITY = "unsupported_activity"
+
+
+class AthleteFitComponent(BaseModel):
+    """One transparent athlete capability or consistency fit signal."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    name: str
+    score: BoundedScore
+    evidence: list[str] = Field(min_length=1)
+
+
+class AthleteFitAssessment(BaseModel):
+    """Versioned athlete-specific fit, distinct from intrinsic difficulty."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    score: BoundedScore | None
+    confidence: BoundedScore
+    components: list[AthleteFitComponent]
+    status: AthleteFitStatus
     scoring_version: str
     warnings: list[str] = Field(default_factory=list)
 
