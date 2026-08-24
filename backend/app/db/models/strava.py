@@ -132,6 +132,7 @@ class StravaActivity(Base):
     moving_time_seconds: Mapped[int] = mapped_column(Integer, nullable=False)
     distance_meters: Mapped[float] = mapped_column(Float, nullable=False)
     elevation_gain_meters: Mapped[float | None] = mapped_column(Float, nullable=True)
+    summary_polyline: Mapped[str | None] = mapped_column(Text, nullable=True)
     synchronized_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

@@ -101,3 +101,31 @@ fit is never represented as bad fit. Candidate/request activity mismatch uses
 `unsupported_activity`. Only a scored assessment populates
 `RouteCandidate.athlete_fit_score`; `confidence_score` remains untouched for final
 recommendation orchestration.
+
+## Geographic novelty (`novelty-v1`)
+
+Novelty asks what fraction of a candidate route the connected athlete apparently
+has not travelled. It is independent of difficulty and fitness and compares all
+available geographic history regardless of activity kind. A prior hike can make
+the same cycling corridor geographically familiar without evidencing cycling fit.
+
+Strava summary polylines are decoded to canonical GeoJSON before scoring. Candidate
+and history share an antimeridian-safe local metric projection, are sampled every
+**50 metres**, and are assigned to **40 metre cells** with a one-cell halo. This
+route-scale tolerance accommodates simplified polylines and small GPS drift; it is
+not metre-perfect visit detection.
+
+```text
+visited_fraction = |candidate_cells ∩ union(history_cells)| / |candidate_cells|
+novelty_score = 1 - visited_fraction
+```
+
+Zero is almost entirely familiar and one almost entirely new. This asymmetric
+candidate-coverage formula prevents a large history from diluting the denominator.
+Evidence reports eligible, usable-geometry, and missing/unusable-geometry activity
+counts and the geometry coverage ratio. With no usable geometry the status is
+`insufficient_history`, score is `null`, and confidence is zero—missing history is
+never automatically novel. Available-result confidence multiplies coverage by an
+evidence-amount factor that reaches full support at ten geometry activities.
+Scoring copies only `RouteCandidate.novelty_score`; difficulty, athlete fit, and
+final `confidence_score` remain untouched.

@@ -26,6 +26,14 @@ class StravaTokenRefreshDTO(BaseModel):
     expires_at: int
 
 
+class StravaActivityMapDTO(BaseModel):
+    """Minimal map portion of a Strava SummaryActivity."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    summary_polyline: str | None = None
+
+
 class StravaActivityDTO(BaseModel):
     """Minimal SummaryActivity data needed at the import boundary."""
 
@@ -37,6 +45,7 @@ class StravaActivityDTO(BaseModel):
     moving_time: int = Field(ge=0)
     distance: float = Field(ge=0)
     total_elevation_gain: float = Field(ge=0)
+    map: StravaActivityMapDTO | None = None
 
     @field_validator("start_date")
     @classmethod

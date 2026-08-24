@@ -260,6 +260,9 @@ def _activity_upsert(source: StravaActivityDTO) -> StravaActivityUpsert:
             if activity is not None
             else source.total_elevation_gain
         ),
+        summary_polyline=(
+            source.map.summary_polyline if source.map is not None else None
+        ),
     )
 
 
