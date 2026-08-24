@@ -11,9 +11,10 @@ const DEBOUNCE_MILLISECONDS = 300;
 type LocationSearchProps = {
   selected: PlanningArea | null;
   onSelect: (area: PlanningArea | null) => void;
+  validationError?: string;
 };
 
-export function LocationSearch({ selected, onSelect }: LocationSearchProps) {
+export function LocationSearch({ selected, onSelect, validationError }: LocationSearchProps) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<PlanningArea[]>([]);
   const [status, setStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
@@ -61,6 +62,8 @@ export function LocationSearch({ selected, onSelect }: LocationSearchProps) {
       <label htmlFor="location-search">Location</label>
       <input
         id="location-search"
+        aria-describedby={validationError ? "planning-area-error" : undefined}
+        aria-invalid={Boolean(validationError)}
         type="search"
         placeholder="Area or location"
         value={query}
@@ -72,6 +75,11 @@ export function LocationSearch({ selected, onSelect }: LocationSearchProps) {
           setQuery(nextQuery);
         }}
       />
+      {validationError && (
+        <p id="planning-area-error" role="alert" className="mt-2 text-sm text-red-700">
+          {validationError}
+        </p>
+      )}
       <div aria-live="polite" className="mt-2 text-sm text-slate-600">
         {status === "loading" && <p>Searching locations…</p>}
         {status === "ready" && results.length === 0 && <p>No locations found.</p>}

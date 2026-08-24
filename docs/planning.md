@@ -36,3 +36,13 @@ own inputs; provider payloads and options must not be added to this model.
 
 Profile-based inference, routing, candidate generation, scoring, and persistence are
 future work.
+
+## Current planner workflow
+
+The workflow is: (1) import history, (2) build the athlete profile, (3) select a
+normalized planning area, (4) choose or override the activity type, (5) optionally
+provide effort, shape, and novelty preferences, and (6) validate the canonical
+request. The frontend converts kilometers and minutes in one normalization step.
+Empty overrides become `null`; they do not silently insert profile percentiles or a
+moderate/balanced default. Successful validation only confirms that inputs are ready.
+Route generation and recommendations remain future work.

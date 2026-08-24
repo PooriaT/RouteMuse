@@ -10,6 +10,14 @@ import type {
   AthleteProfileRequest,
 } from "@/types/athleteProfile";
 import type { PlanningArea } from "@/types/planningArea";
+import {
+  toRoutePlanningRequest,
+  validatePlanningPreferences,
+  type DesiredChallenge,
+  type NoveltyPreference,
+  type PlanningPreferences,
+  type RouteShape,
+} from "@/types/planning";
 
 import {
   AthleteProfileSummary,
@@ -50,6 +58,17 @@ export function PlannerForm({
   const [planningArea, setPlanningArea] = useState<PlanningArea | null>(null);
   const [activitySelection, setActivitySelection] =
     useState<ActivitySelection>({ kind: null, source: "automatic" });
+  const [effortPreferences, setEffortPreferences] = useState<
+    Omit<PlanningPreferences, "planningArea" | "activityKind">
+  >({
+    targetDistanceKm: "",
+    targetDurationMinutes: "",
+    desiredChallenge: null,
+    routeShape: null,
+    noveltyPreference: null,
+  });
+  const [planningErrors, setPlanningErrors] = useState<ReturnType<typeof validatePlanningPreferences>>({});
+  const [planningStatus, setPlanningStatus] = useState<"idle" | "validating" | "ready" | "error">("idle");
   const profileRequestSequence = useRef(0);
   const selectedProfileRequest = useRef<AthleteProfileRequest | null>(null);
   const hasInvalidRange = Boolean(
@@ -187,6 +206,7 @@ export function PlannerForm({
   }, [activityTypes, profile, profileStatus]);
 
   const handleActivityChange = (value: string) => {
+    setPlanningStatus("idle");
     if (value === "") {
       setActivitySelection({ kind: null, source: "user" });
       return;
@@ -196,6 +216,36 @@ export function PlannerForm({
     )?.value;
     if (!selectedKind) return;
     setActivitySelection({ kind: selectedKind, source: "user" });
+  };
+
+  const planningPreferences: PlanningPreferences = {
+    planningArea,
+    activityKind: activitySelection.kind,
+    ...effortPreferences,
+  };
+
+  const updateEffortPreference = <K extends keyof typeof effortPreferences>(
+    key: K,
+    value: (typeof effortPreferences)[K],
+  ) => {
+    setEffortPreferences((current) => ({ ...current, [key]: value }));
+    setPlanningErrors((current) => ({ ...current, [key]: undefined }));
+    setPlanningStatus("idle");
+  };
+
+  const preparePlanningRequest = async () => {
+    const errors = validatePlanningPreferences(planningPreferences);
+    setPlanningErrors(errors);
+    setPlanningStatus("idle");
+    const request = toRoutePlanningRequest(planningPreferences);
+    if (!request) return;
+    setPlanningStatus("validating");
+    try {
+      await api.validatePlanningRequest(request);
+      setPlanningStatus("ready");
+    } catch {
+      setPlanningStatus("error");
+    }
   };
 
   return (
@@ -268,13 +318,17 @@ export function PlannerForm({
         <h2 id="preferences-heading" className="mb-4 text-xl font-bold">Planning preferences</h2>
         <fieldset aria-describedby="preferences-status" className="grid gap-4 md:grid-cols-2">
           <legend className="sr-only">Route planning preferences</legend>
-          <LocationSearch selected={planningArea} onSelect={setPlanningArea} />
+          <LocationSearch validationError={planningErrors.planningArea} selected={planningArea} onSelect={(area) => {
+            setPlanningArea(area);
+            setPlanningErrors((current) => ({ ...current, planningArea: undefined }));
+            setPlanningStatus("idle");
+          }} />
           <div>
             <label htmlFor="activity-type">Activity type</label>
             <select
               id="activity-type"
               aria-describedby={
-                activitySelection.source === "automatic" &&
+                planningErrors.activityKind ? "activity-kind-error" : activitySelection.source === "automatic" &&
                 activitySelection.kind !== null
                   ? "activity-default-context"
                   : undefined
@@ -295,16 +349,21 @@ export function PlannerForm({
                   Suggested from your athlete profile
                 </span>
               )}
+            {planningErrors.activityKind && <span id="activity-kind-error" role="alert" className="text-sm font-normal text-red-700">{planningErrors.activityKind}</span>}
           </div>
-          <label className="opacity-60">Target distance (km), optional<input disabled type="number" min="0" /></label>
-          <label className="opacity-60">Target duration (minutes), optional<input disabled type="number" min="0" /></label>
-          <label className="opacity-60">Desired challenge, optional<select disabled defaultValue=""><option value="">Any challenge</option><option value="easy">Easy</option><option value="moderate">Moderate</option><option value="hard">Hard</option></select></label>
-          <label className="opacity-60">Route shape, optional<select disabled defaultValue=""><option value="">Any route shape</option><option value="loop">Loop</option><option value="out-and-back">Out-and-back</option><option value="point-to-point">Point-to-point</option></select></label>
+          <label>Target distance (km), optional<input aria-describedby={planningErrors.targetDistanceKm ? "distance-error" : undefined} aria-invalid={Boolean(planningErrors.targetDistanceKm)} type="number" min="0" step="any" value={effortPreferences.targetDistanceKm} onChange={(event) => updateEffortPreference("targetDistanceKm", event.target.value)} />{planningErrors.targetDistanceKm && <span id="distance-error" role="alert" className="text-sm font-normal text-red-700">{planningErrors.targetDistanceKm}</span>}</label>
+          <label>Target duration (minutes), optional<input aria-describedby={planningErrors.targetDurationMinutes ? "duration-error" : undefined} aria-invalid={Boolean(planningErrors.targetDurationMinutes)} type="number" min="0" step="any" value={effortPreferences.targetDurationMinutes} onChange={(event) => updateEffortPreference("targetDurationMinutes", event.target.value)} />{planningErrors.targetDurationMinutes && <span id="duration-error" role="alert" className="text-sm font-normal text-red-700">{planningErrors.targetDurationMinutes}</span>}</label>
+          <label>Desired challenge, optional<select value={effortPreferences.desiredChallenge ?? ""} onChange={(event) => updateEffortPreference("desiredChallenge", (event.target.value || null) as DesiredChallenge | null)}><option value="">Use my profile</option><option value="easy">Easy</option><option value="moderate">Moderate</option><option value="hard">Hard</option></select></label>
+          <label>Route shape, optional<select value={effortPreferences.routeShape ?? ""} onChange={(event) => updateEffortPreference("routeShape", (event.target.value || null) as RouteShape | null)}><option value="">Any shape</option><option value="loop">Loop</option><option value="out_and_back">Out-and-back</option><option value="point_to_point">Point-to-point</option></select></label>
+          <label className="md:col-span-2">Novelty preference, optional<span className="text-xs font-normal text-slate-500">Choose whether you prefer known areas or something new.</span><select value={effortPreferences.noveltyPreference ?? ""} onChange={(event) => updateEffortPreference("noveltyPreference", (event.target.value || null) as NoveltyPreference | null)}><option value="">No preference</option><option value="familiar">Prefer familiar</option><option value="balanced">Balanced</option><option value="novel">Prefer something new</option></select></label>
         </fieldset>
-        <p id="preferences-status" className="mt-4 text-sm text-slate-500">Choose a planning area and activity type now. Other route planning controls remain disabled until route generation is implemented.</p>
+        <p id="preferences-status" className="mt-4 text-sm text-slate-500">Optional values stay empty so a future planning service can infer them from your profile.</p>
         {activityTypesUnavailable && (
           <p role="status" className="mt-2 text-sm text-amber-700">Activity types are temporarily unavailable. Try again when the RouteMuse API is running.</p>
         )}
+        <button type="button" disabled={planningStatus === "validating"} aria-busy={planningStatus === "validating"} onClick={() => void preparePlanningRequest()} className="mt-4 rounded bg-emerald-700 px-4 py-3 font-semibold text-white disabled:opacity-60">{planningStatus === "validating" ? "Checking inputs…" : "Prepare route request"}</button>
+        {planningStatus === "ready" && <p role="status" className="mt-3 text-sm font-medium text-emerald-700">Planning inputs are ready. No route has been generated.</p>}
+        {planningStatus === "error" && <p role="alert" className="mt-3 text-sm font-medium text-red-700">The planning inputs could not be validated by RouteMuse. Review them or try again.</p>}
       </section>
 
       <section aria-labelledby="recommendations-heading" className="rounded-xl border-2 border-dashed border-emerald-200 p-8 text-center">

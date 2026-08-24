@@ -27,6 +27,7 @@ vi.mock("@/lib/api/client", async (importOriginal) => {
       syncStravaActivities: vi.fn(),
       athleteProfile: vi.fn(),
       searchPlanningAreas: vi.fn(),
+      validatePlanningRequest: vi.fn(),
     },
   };
 });
@@ -69,6 +70,15 @@ const completed: StravaSynchronizationResult = {
   unsupported: 1,
 };
 
+const planningArea = {
+  latitude: 49.2827,
+  longitude: -123.1207,
+  display_name: "Vancouver, British Columbia",
+  bounding_box: null,
+  source_provider: "openrouteservice",
+  source_attribution: "© OpenStreetMap contributors",
+};
+
 function renderPlanner() {
   return render(
     <PlannerForm
@@ -95,6 +105,7 @@ beforeEach(() => {
   vi.mocked(api.disconnectStrava).mockResolvedValue(disconnected);
   vi.mocked(api.syncStravaActivities).mockResolvedValue(completed);
   vi.mocked(api.athleteProfile).mockResolvedValue(emptyAthleteProfile);
+  vi.mocked(api.validatePlanningRequest).mockImplementation(async (request) => request);
 });
 
 afterEach(() => {
@@ -513,19 +524,72 @@ describe("PlannerForm", () => {
     expect(document.body).not.toHaveTextContent("refresh_token");
   });
 
-  it("enables available planning inputs while retaining disabled future controls", () => {
+  it("makes all planning inputs interactive", () => {
     renderPlanner();
     expect(screen.getByLabelText("Location")).toBeEnabled();
     expect(screen.getByLabelText("Activity type")).toBeEnabled();
-    expect(screen.getByLabelText("Target distance (km), optional")).toBeDisabled();
-    expect(screen.getByLabelText("Target duration (minutes), optional")).toBeDisabled();
-    expect(screen.getByLabelText("Desired challenge, optional")).toBeDisabled();
-    expect(screen.getByLabelText("Route shape, optional")).toBeDisabled();
+    expect(screen.getByLabelText("Target distance (km), optional")).toBeEnabled();
+    expect(screen.getByLabelText("Target duration (minutes), optional")).toBeEnabled();
+    expect(screen.getByLabelText("Desired challenge, optional")).toBeEnabled();
+    expect(screen.getByLabelText("Route shape, optional")).toBeEnabled();
+    expect(screen.getByLabelText(/Novelty preference/)).toBeEnabled();
     expect(screen.getByRole("option", { name: "Walking" })).toHaveValue("walking");
     expect(screen.getByRole("option", { name: "Trail Running" })).toHaveValue(
       "trail_running",
     );
-    expect(screen.getByText(/Choose a planning area and activity type now/)).toBeInTheDocument();
+    expect(screen.getByText(/Optional values stay empty/)).toBeInTheDocument();
+  });
+
+  it("rejects missing required inputs and non-positive effort values locally", () => {
+    renderPlanner();
+    fireEvent.change(screen.getByLabelText("Target distance (km), optional"), { target: { value: "0" } });
+    fireEvent.change(screen.getByLabelText("Target duration (minutes), optional"), { target: { value: "-2" } });
+    fireEvent.click(screen.getByRole("button", { name: "Prepare route request" }));
+
+    expect(screen.getByText("Choose a planning area.")).toHaveAttribute("role", "alert");
+    expect(screen.getByText("Choose an activity type.")).toHaveAttribute("role", "alert");
+    expect(screen.getByText("Distance must be greater than zero.")).toHaveAttribute("role", "alert");
+    expect(screen.getByText("Duration must be greater than zero.")).toHaveAttribute("role", "alert");
+    expect(api.validatePlanningRequest).not.toHaveBeenCalled();
+  });
+
+  it("validates a canonical request and confirms readiness without fabricating a route", async () => {
+    vi.mocked(api.searchPlanningAreas).mockResolvedValue([planningArea]);
+    renderPlanner();
+    fireEvent.change(screen.getByLabelText("Location"), { target: { value: "Vancouver" } });
+    fireEvent.click(await screen.findByRole("button", { name: planningArea.display_name }));
+    fireEvent.change(screen.getByLabelText("Activity type"), { target: { value: "hiking" } });
+    fireEvent.change(screen.getByLabelText("Target distance (km), optional"), { target: { value: "25" } });
+    fireEvent.change(screen.getByLabelText("Target duration (minutes), optional"), { target: { value: "90" } });
+    fireEvent.change(screen.getByLabelText("Desired challenge, optional"), { target: { value: "hard" } });
+    fireEvent.change(screen.getByLabelText("Route shape, optional"), { target: { value: "out_and_back" } });
+    fireEvent.change(screen.getByLabelText(/Novelty preference/), { target: { value: "novel" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Prepare route request" }));
+
+    expect(await screen.findByText(/Planning inputs are ready/)).toHaveAttribute("role", "status");
+    expect(api.validatePlanningRequest).toHaveBeenCalledWith({
+      planning_area: planningArea,
+      activity_kind: "hiking",
+      target_distance_meters: 25_000,
+      target_duration_seconds: 5_400,
+      desired_challenge: "hard",
+      route_shape: "out_and_back",
+      novelty_preference: "novel",
+    });
+    expect(screen.getByText(/No recommendations yet/)).toBeInTheDocument();
+  });
+
+  it("presents backend planning validation failures accessibly", async () => {
+    vi.mocked(api.searchPlanningAreas).mockResolvedValue([planningArea]);
+    vi.mocked(api.validatePlanningRequest).mockRejectedValue(new ApiError("raw", 422));
+    renderPlanner();
+    fireEvent.change(screen.getByLabelText("Location"), { target: { value: "Vancouver" } });
+    fireEvent.click(await screen.findByRole("button", { name: planningArea.display_name }));
+    fireEvent.change(screen.getByLabelText("Activity type"), { target: { value: "hiking" } });
+    fireEvent.click(screen.getByRole("button", { name: "Prepare route request" }));
+
+    expect(await screen.findByText(/could not be validated/)).toHaveAttribute("role", "alert");
   });
 
   it("defaults road cycling from the athlete profile", async () => {

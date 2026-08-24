@@ -9,6 +9,10 @@ import type {
   StravaSynchronizationResult,
 } from "@/types/strava";
 import type { PlanningArea } from "@/types/planningArea";
+import type {
+  PlanningValidationResponse,
+  RoutePlanningRequest,
+} from "@/types/planning";
 
 const API_BASE_URL = (
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000"
@@ -119,6 +123,11 @@ export const api = {
   athleteProfile: (body: AthleteProfileRequest) =>
     request<AthleteProfile, AthleteProfileRequest>(
       "/api/v1/athlete-profile",
+      { method: "POST", body },
+    ),
+  validatePlanningRequest: (body: RoutePlanningRequest) =>
+    request<PlanningValidationResponse, RoutePlanningRequest>(
+      "/api/v1/planning/validate",
       { method: "POST", body },
     ),
 };
