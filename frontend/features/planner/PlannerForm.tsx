@@ -8,6 +8,7 @@ import type {
   AthleteProfile,
   AthleteProfileRequest,
 } from "@/types/athleteProfile";
+import type { PlanningArea } from "@/types/planningArea";
 
 import {
   AthleteProfileSummary,
@@ -15,6 +16,7 @@ import {
 } from "./AthleteProfileSummary";
 import { defaultHistoricalDateRange, type HistoricalDateRange } from "./dateRange";
 import { StravaActivitySync } from "./StravaActivitySync";
+import { LocationSearch } from "./LocationSearch";
 
 type PlannerFormProps = {
   activityTypes: ActivityType[];
@@ -39,6 +41,7 @@ export function PlannerForm({
   const [profileStatus, setProfileStatus] =
     useState<AthleteProfileViewStatus>("idle");
   const [profileError, setProfileError] = useState<string | null>(null);
+  const [planningArea, setPlanningArea] = useState<PlanningArea | null>(null);
   const profileRequestSequence = useRef(0);
   const selectedProfileRequest = useRef<AthleteProfileRequest | null>(null);
   const hasInvalidRange = Boolean(
@@ -210,22 +213,22 @@ export function PlannerForm({
 
       <section aria-labelledby="preferences-heading" className="mb-6 rounded-xl bg-white p-6 shadow-sm">
         <h2 id="preferences-heading" className="mb-4 text-xl font-bold">Planning preferences</h2>
-        <fieldset disabled aria-describedby="preferences-status" className="grid gap-4 opacity-60 md:grid-cols-2">
+        <fieldset aria-describedby="preferences-status" className="grid gap-4 md:grid-cols-2">
           <legend className="sr-only">Route planning preferences</legend>
-          <label>Location<input placeholder="Area or location" /></label>
-          <label>
+          <LocationSearch selected={planningArea} onSelect={setPlanningArea} />
+          <label className="opacity-60">
             Activity type
-            <select defaultValue="">
+            <select disabled defaultValue="">
               <option value="">Select after connecting</option>
               {activityTypes.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
             </select>
           </label>
-          <label>Target distance (km), optional<input type="number" min="0" /></label>
-          <label>Target duration (minutes), optional<input type="number" min="0" /></label>
-          <label>Desired challenge, optional<select defaultValue=""><option value="">Any challenge</option><option value="easy">Easy</option><option value="moderate">Moderate</option><option value="hard">Hard</option></select></label>
-          <label>Route shape, optional<select defaultValue=""><option value="">Any route shape</option><option value="loop">Loop</option><option value="out-and-back">Out-and-back</option><option value="point-to-point">Point-to-point</option></select></label>
+          <label className="opacity-60">Target distance (km), optional<input disabled type="number" min="0" /></label>
+          <label className="opacity-60">Target duration (minutes), optional<input disabled type="number" min="0" /></label>
+          <label className="opacity-60">Desired challenge, optional<select disabled defaultValue=""><option value="">Any challenge</option><option value="easy">Easy</option><option value="moderate">Moderate</option><option value="hard">Hard</option></select></label>
+          <label className="opacity-60">Route shape, optional<select disabled defaultValue=""><option value="">Any route shape</option><option value="loop">Loop</option><option value="out-and-back">Out-and-back</option><option value="point-to-point">Point-to-point</option></select></label>
         </fieldset>
-        <p id="preferences-status" className="mt-4 text-sm text-slate-500">Athlete analysis is available above. Route planning controls remain disabled until the route-planning backend is implemented.</p>
+        <p id="preferences-status" className="mt-4 text-sm text-slate-500">Choose a planning area now. Other route planning controls remain disabled until route generation is implemented.</p>
         {activityTypesUnavailable && (
           <p role="status" className="mt-2 text-sm text-amber-700">Activity types are temporarily unavailable. Try again when the RouteMuse API is running.</p>
         )}

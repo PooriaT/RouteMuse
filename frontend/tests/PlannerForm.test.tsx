@@ -24,6 +24,7 @@ vi.mock("@/lib/api/client", async (importOriginal) => {
       disconnectStrava: vi.fn(),
       syncStravaActivities: vi.fn(),
       athleteProfile: vi.fn(),
+      searchPlanningAreas: vi.fn(),
     },
   };
 });
@@ -500,9 +501,9 @@ describe("PlannerForm", () => {
     expect(document.body).not.toHaveTextContent("refresh_token");
   });
 
-  it("renders disabled planning controls and API-supplied activity types", () => {
+  it("enables location search while retaining disabled future controls", () => {
     renderPlanner();
-    expect(screen.getByLabelText("Location")).toBeDisabled();
+    expect(screen.getByLabelText("Location")).toBeEnabled();
     expect(screen.getByLabelText("Activity type")).toBeDisabled();
     expect(screen.getByLabelText("Target distance (km), optional")).toBeDisabled();
     expect(screen.getByLabelText("Target duration (minutes), optional")).toBeDisabled();
@@ -512,7 +513,7 @@ describe("PlannerForm", () => {
     expect(screen.getByRole("option", { name: "Trail Running" })).toHaveValue(
       "trail_running",
     );
-    expect(screen.getByText(/Athlete analysis/)).toBeInTheDocument();
+    expect(screen.getByText(/Choose a planning area now/)).toBeInTheDocument();
   });
 
   it("renders a clear recommendations empty state", () => {

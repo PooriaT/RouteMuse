@@ -92,6 +92,15 @@ describe("RouteMuse API client", () => {
     );
   });
 
+  it("searches RouteMuse planning areas without exposing provider parameters", async () => {
+    fetchMock.mockResolvedValue(jsonResponse([]));
+    await api.searchPlanningAreas("North Vancouver");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:8000/api/v1/planning-areas/search?q=North%20Vancouver",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
   it("preserves safe status, retry, and partial-result error metadata", async () => {
     const partial = {
       status: "partial",

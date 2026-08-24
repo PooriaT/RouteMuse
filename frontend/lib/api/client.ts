@@ -8,6 +8,7 @@ import type {
   StravaSynchronizationRequest,
   StravaSynchronizationResult,
 } from "@/types/strava";
+import type { PlanningArea } from "@/types/planningArea";
 
 const API_BASE_URL = (
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000"
@@ -23,6 +24,7 @@ type RequestOptions<TBody = never> = {
   method?: "GET" | "POST";
   body?: TBody;
   credentials?: RequestCredentials;
+  signal?: AbortSignal;
 };
 
 export class ApiError extends Error {
@@ -54,6 +56,7 @@ async function request<TResponse, TBody = never>(
           : { "Content-Type": "application/json" },
       cache: "no-store",
       credentials: options.credentials,
+      signal: options.signal,
     });
   } catch {
     throw new ApiError("RouteMuse API is unavailable", 0, "network_error");
@@ -96,6 +99,11 @@ async function readErrorDetail(
 export const api = {
   health: () => request<{ status: "ok" }>("/health"),
   activityTypes: () => request<ActivityType[]>("/api/v1/activity-types"),
+  searchPlanningAreas: (query: string, signal?: AbortSignal) =>
+    request<PlanningArea[]>(
+      `/api/v1/planning-areas/search?q=${encodeURIComponent(query)}`,
+      { signal },
+    ),
   stravaConnectUrl: () => `${API_BASE_URL}/api/v1/strava/connect`,
   stravaStatus: () =>
     request<StravaConnectionStatus>("/api/v1/strava/status"),

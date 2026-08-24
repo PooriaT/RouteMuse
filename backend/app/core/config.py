@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     strava_client_secret: SecretStr | None = None
     strava_redirect_uri: str | None = None
     strava_token_encryption_key: SecretStr | None = None
+    openrouteservice_api_key: SecretStr | None = None
 
     @field_validator("cors_origins", mode="before")
     @classmethod
