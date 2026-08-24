@@ -14,6 +14,7 @@ from app.integrations.routing.errors import (
     ProviderAuthenticationError,
     ProviderConfigurationError,
     ProviderInvalidRequestError,
+    ProviderLimitError,
     RouteProviderMalformedResponseError,
     RouteProviderRateLimitError,
     RouteProviderTemporaryError,
@@ -91,12 +92,21 @@ def test_profile_mapping_is_explicit() -> None:
     assert ACTIVITY_PROFILES == {
         ActivityKind.WALKING: "foot-walking",
         ActivityKind.HIKING: "foot-hiking",
+        ActivityKind.ROAD_CYCLING: "cycling-road",
+        ActivityKind.GRAVEL_CYCLING: "cycling-regular",
+        ActivityKind.MOUNTAIN_BIKING: "cycling-mountain",
     }
 
 
 @pytest.mark.parametrize(
     ("kind", "profile"),
-    [(ActivityKind.WALKING, "foot-walking"), (ActivityKind.HIKING, "foot-hiking")],
+    [
+        (ActivityKind.WALKING, "foot-walking"),
+        (ActivityKind.HIKING, "foot-hiking"),
+        (ActivityKind.ROAD_CYCLING, "cycling-road"),
+        (ActivityKind.GRAVEL_CYCLING, "cycling-regular"),
+        (ActivityKind.MOUNTAIN_BIKING, "cycling-mountain"),
+    ],
 )
 def test_waypoint_body_and_profile(kind: ActivityKind, profile: str) -> None:
     seen: list[httpx.Request] = []
@@ -158,6 +168,35 @@ def test_round_trip_translation_and_seed() -> None:
     assert candidate.route_shape.value == "loop"
 
 
+@pytest.mark.parametrize(
+    "kind",
+    [
+        ActivityKind.ROAD_CYCLING,
+        ActivityKind.GRAVEL_CYCLING,
+        ActivityKind.MOUNTAIN_BIKING,
+    ],
+)
+def test_cycling_round_trip_modes(kind: ActivityKind) -> None:
+    seen: list[dict[str, Any]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(json.loads(request.content))
+        return httpx.Response(200, json=response_payload())
+
+    request = RoutingRequest(
+        activity_kind=kind,
+        start=[-123.1, 49.2],
+        round_trip=RoundTripParameters(
+            target_distance_meters=25000.0, points=5, seed=42
+        ),
+    )
+    candidate = asyncio.run(invoke(handler, request))
+    assert seen[0]["options"]["round_trip"]["length"] == 25000.0
+    assert candidate.activity_kind is kind
+    assert candidate.generation_provenance is not None
+    assert candidate.generation_provenance.requested_distance_meters == 25000.0
+
+
 def test_normalizes_geometry_facts_extras_warning_and_provenance() -> None:
     candidate = asyncio.run(
         invoke(lambda _: httpx.Response(200, json=response_payload()))
@@ -183,10 +222,36 @@ def test_normalizes_geometry_facts_extras_warning_and_provenance() -> None:
     assert candidate.provenance[0].provider == "openrouteservice"
     assert "OpenStreetMap contributors" in candidate.provenance[0].attribution
     assert candidate.provenance[0].provider_request_id == "request-123"
+    assert candidate.provenance[0].provider_profile == "foot-walking"
     assert candidate.difficulty_score is None
     assert candidate.athlete_fit_score is None
     assert candidate.excitement_score is None
     assert candidate.novelty_score is None
+
+
+def test_cycling_trail_difficulty_is_a_factual_mtb_scale() -> None:
+    candidate = asyncio.run(invoke(
+        lambda _: httpx.Response(200, json=response_payload()),
+        route_request(ActivityKind.MOUNTAIN_BIKING),
+    ))
+    assert ("trail_difficulty", "mountain_bike_s1") in [
+        (item.characteristic, item.value)
+        for item in candidate.technical_breakdown
+    ]
+    assert candidate.provenance[0].provider_profile == "cycling-mountain"
+    assert candidate.difficulty_score is None
+
+
+def test_unknown_surface_is_not_inferred() -> None:
+    payload = response_payload()
+    payload["features"][0]["properties"]["extras"]["surface"]["summary"] = [  # type: ignore[index]
+        {"value": 0, "distance": 4000},
+        {"value": 999, "distance": 321.5},
+    ]
+    candidate = asyncio.run(invoke(lambda _: httpx.Response(200, json=payload)))
+    assert [item.value for item in candidate.surface_breakdown] == [
+        "unknown", "unknown_999"
+    ]
 
 
 def test_reconciles_rounded_extra_distances_to_route_distance() -> None:
@@ -256,6 +321,43 @@ def test_rate_limit_and_timeout() -> None:
 
     with pytest.raises(RouteProviderTimeoutError):
         asyncio.run(invoke(timeout))
+
+
+def test_provider_limit_is_explicit_and_not_clamped() -> None:
+    seen: list[dict[str, Any]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(json.loads(request.content))
+        return httpx.Response(400, json={
+            "error": {"code": 2013, "message": "request exceeds limit"}
+        })
+
+    request = RoutingRequest(
+        activity_kind=ActivityKind.ROAD_CYCLING,
+        start=[-123.1, 49.2],
+        round_trip=RoundTripParameters(
+            target_distance_meters=999999.0, points=4, seed=1
+        ),
+    )
+    with pytest.raises(ProviderLimitError):
+        asyncio.run(invoke(handler, request))
+    assert seen[0]["options"]["round_trip"]["length"] == 999999.0
+
+
+def test_missing_parameter_error_is_not_mislabeled_as_provider_limit() -> None:
+    with pytest.raises(ProviderInvalidRequestError):
+        asyncio.run(invoke(lambda _: httpx.Response(400, json={
+            "error": {"code": 2004, "message": "missing parameter"}
+        })))
+
+
+def test_malformed_extras_are_rejected() -> None:
+    payload = response_payload()
+    payload["features"][0]["properties"]["extras"]["surface"] = {  # type: ignore[index]
+        "summary": [{"value": "asphalt", "distance": 4321.5}]
+    }
+    with pytest.raises(RouteProviderMalformedResponseError):
+        asyncio.run(invoke(lambda _: httpx.Response(200, json=payload)))
 
 
 @pytest.mark.parametrize(
