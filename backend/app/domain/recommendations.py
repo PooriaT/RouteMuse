@@ -1,4 +1,32 @@
-from pydantic import BaseModel, Field
+from typing import Annotated
+
+from pydantic import BaseModel, ConfigDict, Field
+
+BoundedScore = Annotated[float, Field(ge=0, le=1, allow_inf_nan=False)]
+
+
+class ScoreComponent(BaseModel):
+    """One independently explainable factual contribution to a route score."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    name: str
+    score: BoundedScore | None
+    weight: BoundedScore
+    evidence_available: bool
+    evidence_summary: str
+
+
+class RouteDifficultyAssessment(BaseModel):
+    """Versioned intrinsic difficulty plus an explicit evidence audit."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    score: BoundedScore
+    components: list[ScoreComponent]
+    evidence_coverage: BoundedScore
+    scoring_version: str
+    warnings: list[str] = Field(default_factory=list)
 
 
 class RecommendationExplanation(BaseModel):
