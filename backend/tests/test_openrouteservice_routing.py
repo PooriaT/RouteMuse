@@ -116,6 +116,23 @@ def test_waypoint_body_and_profile(kind: ActivityKind, profile: str) -> None:
     }
 
 
+def test_input_elevations_are_removed_from_waypoints() -> None:
+    seen: list[dict[str, Any]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(json.loads(request.content))
+        return httpx.Response(200, json=response_payload())
+
+    request = RoutingRequest(
+        activity_kind=ActivityKind.WALKING,
+        coordinates=[[-123.1, 49.2, 50.0], [-123.2, 49.3, 75.0]],
+    )
+    asyncio.run(invoke(handler, request))
+
+    assert seen[0]["coordinates"] == [[-123.1, 49.2], [-123.2, 49.3]]
+    assert seen[0]["elevation"] is True
+
+
 def test_round_trip_translation_and_seed() -> None:
     seen: list[dict[str, Any]] = []
 
@@ -170,6 +187,29 @@ def test_normalizes_geometry_facts_extras_warning_and_provenance() -> None:
     assert candidate.athlete_fit_score is None
     assert candidate.excitement_score is None
     assert candidate.novelty_score is None
+
+
+def test_reconciles_rounded_extra_distances_to_route_distance() -> None:
+    payload = response_payload()
+    feature = payload["features"][0]  # type: ignore[index]
+    properties = feature["properties"]  # type: ignore[index]
+    properties["summary"]["distance"] = 100.0  # type: ignore[index]
+    properties["extras"]["surface"]["summary"] = [  # type: ignore[index]
+        {"value": 3, "distance": 33.4},
+        {"value": 10, "distance": 33.4},
+        {"value": 12, "distance": 33.4},
+    ]
+
+    candidate = asyncio.run(
+        invoke(lambda _: httpx.Response(200, json=payload))
+    )
+
+    distances = [item.distance_meters for item in candidate.surface_breakdown]
+    assert all(distance is not None for distance in distances)
+    normalized_total = sum(
+        distance for distance in distances if distance is not None
+    )
+    assert normalized_total == pytest.approx(100.0)
 
 
 def test_missing_elevation_remains_none() -> None:

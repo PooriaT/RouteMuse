@@ -140,7 +140,7 @@ class OpenRouteServiceRoutingProvider:
             raise UnsupportedActivityError from exc
 
         body: dict[str, Any] = {
-            "coordinates": request.coordinates or [request.start],
+            "coordinates": _ors_coordinates(request),
             "elevation": True,
             "extra_info": EXTRA_INFORMATION,
         }
@@ -214,14 +214,24 @@ class OpenRouteServiceRoutingProvider:
             elevation_loss_meters=summary.descent,
             geometry=geometry,
             route_shape=shape,
-            surface_breakdown=_categorical(extras.get("surface"), SURFACES),
-            way_type_breakdown=_categorical(extras.get("waytype"), WAY_TYPES),
+            surface_breakdown=_categorical(
+                extras.get("surface"), SURFACES, summary.distance
+            ),
+            way_type_breakdown=_categorical(
+                extras.get("waytype"), WAY_TYPES, summary.distance
+            ),
             technical_breakdown=[
-                *_technical(extras.get("steepness"), "steepness", STEEPNESS),
+                *_technical(
+                    extras.get("steepness"),
+                    "steepness",
+                    STEEPNESS,
+                    summary.distance,
+                ),
                 *_technical(
                     extras.get("traildifficulty"),
                     "trail_difficulty",
                     TRAIL_DIFFICULTY,
+                    summary.distance,
                 ),
             ],
             provenance=[ProviderProvenance(
@@ -234,29 +244,64 @@ class OpenRouteServiceRoutingProvider:
         )
 
 
-def _measure(item: _ExtraSummary) -> dict[str, float]:
-    if item.distance is not None:
-        return {"distance_meters": item.distance}
-    if item.amount is not None:
-        return {"proportion": item.amount / 100}
-    return {}
+def _ors_coordinates(request: RoutingRequest) -> list[list[float]]:
+    """Reduce canonical 2D/3D positions to ORS's longitude/latitude input."""
+    coordinates = request.coordinates
+    if coordinates is None:
+        # RoutingRequest validation guarantees start is present in round-trip mode.
+        assert request.start is not None
+        coordinates = [request.start]
+    return [[coordinate[0], coordinate[1]] for coordinate in coordinates]
+
+
+def _measures(
+    extra: _Extra, route_distance: float
+) -> list[dict[str, float]]:
+    """Reconcile independently rounded ORS breakdowns with route totals."""
+    measures = [
+        {"distance_meters": item.distance}
+        if item.distance is not None
+        else {"proportion": item.amount / 100}
+        if item.amount is not None
+        else {}
+        for item in extra.summary
+    ]
+    distance_total = sum(
+        measure.get("distance_meters", 0.0) for measure in measures
+    )
+    if distance_total > route_distance:
+        factor = route_distance / distance_total
+        for measure in measures:
+            if "distance_meters" in measure:
+                measure["distance_meters"] *= factor
+    proportion_total = sum(measure.get("proportion", 0.0) for measure in measures)
+    if proportion_total > 1:
+        for measure in measures:
+            if "proportion" in measure:
+                measure["proportion"] /= proportion_total
+    return measures
 
 
 def _categorical(
-    extra: _Extra | None, labels: dict[int, str]
+    extra: _Extra | None, labels: dict[int, str], route_distance: float
 ) -> list[SurfaceSummary] | list[WayTypeSummary]:
     if extra is None:
         return []
     model = SurfaceSummary if labels is SURFACES else WayTypeSummary
     return [
         model(value=labels.get(item.value, f"unknown_{item.value}"), **measure)
-        for item in extra.summary
-        if (measure := _measure(item))
+        for item, measure in zip(
+            extra.summary, _measures(extra, route_distance), strict=True
+        )
+        if measure
     ]
 
 
 def _technical(
-    extra: _Extra | None, characteristic: str, labels: dict[int, str]
+    extra: _Extra | None,
+    characteristic: str,
+    labels: dict[int, str],
+    route_distance: float,
 ) -> list[TechnicalSummary]:
     if extra is None:
         return []
@@ -266,8 +311,10 @@ def _technical(
             value=labels.get(item.value, f"unknown_{item.value}"),
             **measure,
         )
-        for item in extra.summary
-        if (measure := _measure(item))
+        for item, measure in zip(
+            extra.summary, _measures(extra, route_distance), strict=True
+        )
+        if measure
     ]
 
 
