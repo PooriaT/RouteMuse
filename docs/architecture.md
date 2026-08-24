@@ -9,8 +9,11 @@ flowchart TD
   N --> A[Athlete profile]
   A --> RC[Route candidates]
   L[Planning inputs] --> PR[Canonical RoutePlanningRequest]
-  PR --> GP[Future geospatial / routing providers]
-  GP -->|grounded route facts| RC
+  PR --> OR[RouteMuse orchestration]
+  OR --> TD[Trail discovery]
+  OR --> RP[Routing]
+  TD -->|TrailFeature facts| RC
+  RP -->|routed facts| RC
   RC --> D[Deterministic scoring]
   D --> O[Ollama explanation]
   O --> U[Frontend recommendations]
@@ -26,7 +29,11 @@ RouteMuse owns the vocabulary used by the rest of the application: `ActivityKind
 
 **Strava.** Strava is an external activity-data provider, not the owner of RouteMuse's taxonomy. The OAuth HTTP client and provider DTOs stay inside `backend/app/integrations/strava/`. The API initiates authorization, validates a short-lived HttpOnly state cookie, checks the actually granted `activity:read_all` scope, exchanges codes server-side, and exposes only token-free status. A centralized lifecycle service obtains usable access tokens and persists refresh-token rotation under a database row lock. The activity boundary classifies the provider's exact `sport_type` values through an explicit mapping; unsupported values retain their original provider value and do not produce a RouteMuse activity. The synchronization service converts required IANA-timezone calendar ranges into UTC provider bounds, retrieves typed pages sequentially, delegates token refresh to that lifecycle service, and commits idempotent upserts one page at a time. Provider-specific fields do not leak into domain logic. Athlete-profile requests are RouteMuse application endpoints: they query canonical persisted rows and never call Strava.
 
-**Geospatial and routing providers.** External systems own factual trail and route information. Adapters normalize their geometry, coordinates, distance, elevation, surface, access, safety, and attribution facts into RouteMuse `RouteCandidate` models. Their implementations depend on small contracts, such as the protocols in `backend/app/integrations/contracts.py`, so a provider can be replaced without rewriting the domain.
+**Geospatial and routing providers.** External systems own factual trail and route information. Discovery accepts a bounded `RouteDiscoveryRequest` and returns factual `TrailFeature` values; a discovered way or named-route relation is not a generated candidate. Routing accepts the narrower `RoutingRequest`, in either waypoint or seeded round-trip mode, and returns `RouteCandidate`. RouteMuse orchestration will later translate product-level `RoutePlanningRequest` preferences into those provider inputs. Adapters normalize geometry, distance, elevation, surface, way type, access, technical distributions, and confidence without leaking raw provider payloads.
+
+All routed paths use RouteMuse's `GeoJsonLineString`, whose positions are explicitly `[longitude, latitude]` or `[longitude, latitude, elevation_meters]`. Provider-backed features and candidates require one or more `ProviderProvenance` entries. Each entry retains a provider identity, non-empty attribution, source identifiers, and an optional provider request identifier, allowing discovery and routing facts from multiple sources to coexist. Adapters—not orchestration or scoring—declare provider-specific attribution.
+
+Candidate `data_confidence` describes provider/data quality. The optional recommendation fields are a separate, downstream RouteMuse concern and providers must leave them unset. Surface, way-type, and technical facts use measured/proportional breakdowns rather than raw response objects. Optional generation provenance reserves the algorithm version, requested distance, seed, and point count needed for future reproducibility; this contract does not generate them.
 
 **Ollama.** Ollama may reason over and explain already-grounded, structured candidates. It is downstream of factual providers and deterministic scoring. It is never authoritative for coordinates, route geometry, trail existence, distance, elevation, access restrictions, or safety conditions, and must not invent any of them.
 
