@@ -26,6 +26,8 @@ class Settings(BaseSettings):
     strava_redirect_uri: str | None = None
     strava_token_encryption_key: SecretStr | None = None
     openrouteservice_api_key: SecretStr | None = None
+    overpass_api_url: str = "https://overpass-api.de/api/interpreter"
+    overpass_user_agent: str = "RouteMuse/0.1 (OpenStreetMap discovery)"
 
     @field_validator("cors_origins", mode="before")
     @classmethod

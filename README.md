@@ -126,6 +126,21 @@ generate a route; provider-backed route discovery remains future work.
 
 `.env.example` documents secret-free geocoding configuration and future Ollama settings. Ollama is not launched or downloaded by the application.
 
+## OpenStreetMap discovery
+
+The backend includes a replaceable `RouteDiscoveryProvider` backed by Overpass. It
+discovers factual OpenStreetMap ways and named route memberships for a planning
+area; it does **not** generate or rank routed paths. Every query has an explicit
+bounding box. Areas larger than a 25 km discovery radius are conservatively
+clamped around the selected planning-area center.
+
+`OVERPASS_API_URL` can select a public, commercial, or self-hosted interpreter; no
+API key is required. Successful normalized results use a small process-local,
+five-minute bounded cache, and a provider instance serializes its HTTP requests to
+avoid parallel bursts against shared infrastructure. Returned features retain
+`© OpenStreetMap contributors` attribution and the
+[OpenStreetMap copyright/ODbL reference](https://www.openstreetmap.org/copyright).
+
 ## Commands
 
 | Command | Purpose |
