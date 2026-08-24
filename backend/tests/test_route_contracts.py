@@ -214,3 +214,61 @@ def test_candidate_rejects_breakdown_larger_than_route() -> None:
                 SurfaceSummary(value="unpaved", proportion=0.5),
             ],
         )
+
+
+def test_candidate_validates_each_technical_characteristic_separately() -> None:
+    candidate = RouteCandidate(
+        id=uuid4(),
+        name="Independent technical distributions",
+        activity_kind=ActivityKind.HIKING,
+        distance_meters=1000,
+        geometry=geometry(),
+        provenance=[provenance()],
+        technical_breakdown=[
+            TechnicalSummary(
+                characteristic="grade", value="gentle", proportion=0.4
+            ),
+            TechnicalSummary(
+                characteristic="grade", value="steep", proportion=0.6
+            ),
+            TechnicalSummary(
+                characteristic="smoothness", value="smooth", distance_meters=250
+            ),
+            TechnicalSummary(
+                characteristic="smoothness", value="rough", distance_meters=750
+            ),
+        ],
+    )
+
+    assert len(candidate.technical_breakdown) == 4
+
+
+@pytest.mark.parametrize("measure", ["proportion", "distance_meters"])
+def test_candidate_rejects_oversized_single_technical_distribution(
+    measure: str,
+) -> None:
+    values = (0.6, 0.5) if measure == "proportion" else (600, 500)
+    summaries = [
+        TechnicalSummary(
+            characteristic="grade", value="gentle", **{measure: values[0]}
+        ),
+        TechnicalSummary(
+            characteristic="grade", value="steep", **{measure: values[1]}
+        ),
+        TechnicalSummary(
+            characteristic="smoothness",
+            value="smooth",
+            **{measure: 1 if measure == "proportion" else 1000},
+        ),
+    ]
+
+    with pytest.raises(ValidationError):
+        RouteCandidate(
+            id=uuid4(),
+            name="Invalid technical distribution",
+            activity_kind=ActivityKind.HIKING,
+            distance_meters=1000,
+            geometry=geometry(),
+            provenance=[provenance()],
+            technical_breakdown=summaries,
+        )

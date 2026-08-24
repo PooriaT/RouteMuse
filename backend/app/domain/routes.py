@@ -219,11 +219,18 @@ class RouteCandidate(CanonicalModel):
 
     @model_validator(mode="after")
     def validate_breakdown_totals(self) -> "RouteCandidate":
-        for breakdown in (
+        technical_by_characteristic: dict[str, list[TechnicalSummary]] = {}
+        for summary in self.technical_breakdown:
+            technical_by_characteristic.setdefault(summary.characteristic, []).append(
+                summary
+            )
+
+        breakdowns = [
             self.surface_breakdown,
             self.way_type_breakdown,
-            self.technical_breakdown,
-        ):
+            *technical_by_characteristic.values(),
+        ]
+        for breakdown in breakdowns:
             proportions = [item.proportion for item in breakdown if item.proportion]
             if sum(proportions) > 1 + 1e-9:
                 raise ValueError("breakdown proportions cannot total more than one")
