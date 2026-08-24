@@ -553,6 +553,34 @@ describe("PlannerForm", () => {
     expect(api.validatePlanningRequest).not.toHaveBeenCalled();
   });
 
+  it("clears the missing-activity error as soon as a valid activity is selected", () => {
+    renderPlanner();
+    fireEvent.click(screen.getByRole("button", { name: "Prepare route request" }));
+    const selector = screen.getByLabelText("Activity type");
+    expect(screen.getByText("Choose an activity type.")).toHaveAttribute(
+      "role",
+      "alert",
+    );
+
+    fireEvent.change(selector, { target: { value: "hiking" } });
+
+    expect(screen.queryByText("Choose an activity type.")).not.toBeInTheDocument();
+    expect(selector).not.toHaveAttribute("aria-describedby", "activity-kind-error");
+  });
+
+  it("rejects durations that would send fractional canonical seconds", () => {
+    renderPlanner();
+    const duration = screen.getByLabelText("Target duration (minutes), optional");
+    fireEvent.change(duration, { target: { value: "2.51" } });
+    fireEvent.click(screen.getByRole("button", { name: "Prepare route request" }));
+
+    expect(
+      screen.getByText("Duration must convert to a whole number of seconds."),
+    ).toHaveAttribute("role", "alert");
+    expect(duration).toHaveAttribute("aria-invalid", "true");
+    expect(api.validatePlanningRequest).not.toHaveBeenCalled();
+  });
+
   it("validates a canonical request and confirms readiness without fabricating a route", async () => {
     vi.mocked(api.searchPlanningAreas).mockResolvedValue([planningArea]);
     renderPlanner();

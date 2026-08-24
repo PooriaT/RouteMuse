@@ -216,6 +216,10 @@ export function PlannerForm({
     )?.value;
     if (!selectedKind) return;
     setActivitySelection({ kind: selectedKind, source: "user" });
+    setPlanningErrors((current) => ({
+      ...current,
+      activityKind: undefined,
+    }));
   };
 
   const planningPreferences: PlanningPreferences = {

@@ -26,4 +26,19 @@ describe("planning request normalization", () => {
   it("requires a location and activity before validation", () => {
     expect(validatePlanningPreferences(preferences({ planningArea: null, activityKind: null }))).toMatchObject({ planningArea: expect.any(String), activityKind: expect.any(String) });
   });
+
+  it("rejects a duration that converts to fractional canonical seconds", () => {
+    const state = preferences({ targetDurationMinutes: "2.51" });
+
+    expect(validatePlanningPreferences(state).targetDurationMinutes).toBe(
+      "Duration must convert to a whole number of seconds.",
+    );
+    expect(toRoutePlanningRequest(state)).toBeNull();
+  });
+
+  it("accepts fractional minutes when they convert to whole seconds", () => {
+    expect(
+      toRoutePlanningRequest(preferences({ targetDurationMinutes: "2.5" })),
+    ).toMatchObject({ target_duration_seconds: 150 });
+  });
 });

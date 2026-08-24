@@ -50,6 +50,12 @@ export function validatePlanningPreferences(
       Number(preferences.targetDurationMinutes) <= 0)
   ) {
     errors.targetDurationMinutes = "Duration must be greater than zero.";
+  } else if (
+    preferences.targetDurationMinutes !== "" &&
+    !Number.isInteger(Number(preferences.targetDurationMinutes) * 60)
+  ) {
+    errors.targetDurationMinutes =
+      "Duration must convert to a whole number of seconds.";
   }
   return errors;
 }
