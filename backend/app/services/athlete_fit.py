@@ -220,6 +220,7 @@ def assess_athlete_fit(
                 )
             )
             used_ranges.append(density_range)
+            high_end = max(high_end, density / max(density_range.p90, 1))
     else:
         warnings.append("missing_elevation_fit_evidence")
 

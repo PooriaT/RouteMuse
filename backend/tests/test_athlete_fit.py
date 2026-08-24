@@ -204,6 +204,17 @@ def test_inactivity_only_reduces_separate_consistency_support() -> None:
     )
 
 
+def test_climbing_density_scales_consistency_support() -> None:
+    assessed = assess_athlete_fit(
+        route(5_000, duration=2_000, elevation=300),
+        request(),
+        profile(inactive=True),
+    )
+
+    assert component(assessed, "climbing_density_capability")
+    assert component(assessed, "current_consistency").score == pytest.approx(0.04)
+
+
 def test_deterministic_and_candidate_population_does_not_set_confidence() -> None:
     candidate = route()
     first = assess_athlete_fit(candidate, request(), profile())
