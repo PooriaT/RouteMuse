@@ -24,9 +24,12 @@ export function RouteMap({ recommendations, selectedCandidateId, onSelectCandida
   const fittedResultRef = useRef<RankedRecommendation[] | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const data = useMemo(() => featureCollection(recommendations), [recommendations]);
-  const initialDataRef = useRef(data);
-  const initialRecommendationsRef = useRef(recommendations);
-  const initialSelectionRef = useRef(selectedCandidateId);
+  const latestDataRef = useRef(data);
+  const latestRecommendationsRef = useRef(recommendations);
+  const latestSelectionRef = useRef(selectedCandidateId);
+  latestDataRef.current = data;
+  latestRecommendationsRef.current = recommendations;
+  latestSelectionRef.current = selectedCandidateId;
 
   useEffect(() => { onSelectRef.current = onSelectCandidate; }, [onSelectCandidate]);
 
@@ -42,12 +45,12 @@ export function RouteMap({ recommendations, selectedCandidateId, onSelectCandida
         map.addControl(new maplibregl.NavigationControl({ showCompass: true }), "top-right");
         map.on("load", () => {
           if (!map) return;
-          map.addSource(SOURCE_ID, { type: "geojson", data: initialDataRef.current });
-          map.addLayer({ id: UNSELECTED_LAYER, type: "line", source: SOURCE_ID, filter: ["!=", ["get", "candidate_id"], initialSelectionRef.current ?? ""], paint: { "line-color": "#64748b", "line-width": 4, "line-opacity": 0.72 } });
-          map.addLayer({ id: SELECTED_LAYER, type: "line", source: SOURCE_ID, filter: ["==", ["get", "candidate_id"], initialSelectionRef.current ?? ""], paint: { "line-color": "#047857", "line-width": 7, "line-opacity": 1 } });
+          map.addSource(SOURCE_ID, { type: "geojson", data: latestDataRef.current });
+          map.addLayer({ id: UNSELECTED_LAYER, type: "line", source: SOURCE_ID, filter: ["!=", ["get", "candidate_id"], latestSelectionRef.current ?? ""], paint: { "line-color": "#64748b", "line-width": 4, "line-opacity": 0.72 } });
+          map.addLayer({ id: SELECTED_LAYER, type: "line", source: SOURCE_ID, filter: ["==", ["get", "candidate_id"], latestSelectionRef.current ?? ""], paint: { "line-color": "#047857", "line-width": 7, "line-opacity": 1 } });
           map.addLayer({ id: HIT_LAYER, type: "line", source: SOURCE_ID, paint: { "line-color": "#000000", "line-width": 18, "line-opacity": 0 } });
-          fitAll(map, initialRecommendationsRef.current);
-          fittedResultRef.current = initialRecommendationsRef.current;
+          fitAll(map, latestRecommendationsRef.current);
+          fittedResultRef.current = latestRecommendationsRef.current;
         });
         const select = (event: MapMouseEvent) => {
           const candidateId = event.features?.[0]?.properties?.candidate_id;
