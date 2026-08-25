@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { GeoJSONSource, Map as MapLibreMap, MapMouseEvent } from "maplibre-gl";
+import type { GeoJSONSource, Map as MapLibreMap, MapLayerMouseEvent } from "maplibre-gl";
 
 import type { RankedRecommendation } from "@/types/recommendations";
 
@@ -52,7 +52,7 @@ export function RouteMap({ recommendations, selectedCandidateId, onSelectCandida
           fitAll(map, latestRecommendationsRef.current);
           fittedResultRef.current = latestRecommendationsRef.current;
         });
-        const select = (event: MapMouseEvent) => {
+        const select = (event: MapLayerMouseEvent) => {
           const candidateId = event.features?.[0]?.properties?.candidate_id;
           if (typeof candidateId === "string") onSelectRef.current(candidateId);
         };
