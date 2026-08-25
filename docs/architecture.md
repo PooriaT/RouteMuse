@@ -103,3 +103,22 @@ Because RouteMuse does not yet have application-user identities, selected planni
 8. External implementations remain replaceable through small provider contracts.
 
 The application contains deterministic, provider-neutral athlete analytics for supported historical activities, including dominant activity, representative capability, and consistency/recency signals by RouteMuse activity kind. The versioned RouteMuse API and planner now expose this profile from persisted history. It contains no route scoring or LLM calls. The live Strava integration provides OAuth connection and token lifecycle behavior, a pure provider-to-domain activity normalization boundary, and synchronous historical activity synchronization with durable completed, partial, or failed run metadata.
+
+## Historical route geometry and novelty
+
+The paginated Strava SummaryActivity import reads nullable `map.summary_polyline`
+from existing pages; it makes no per-activity detail or stream requests. Only that
+privacy-reduced summary is stored. Shortened/null geometry remains shortened/null:
+RouteMuse does not reconstruct hidden portions, infer home coordinates, reverse
+geocode history, or retain raw payloads. Existing rows remain nullable and can gain
+geometry through a normal re-sync of an explicit older calendar range; no network
+backfill runs automatically.
+
+Encoded polylines are translated at the persistence/provider boundary into
+provider-neutral historical records with canonical `[longitude, latitude]`
+GeoJSON. Novelty queries one connected athlete over explicit UTC bounds and reports
+eligible, usable, and missing-geometry counts. Pure scoring reuses the same 50 m
+sampling, 40 m buffered cells, local projection, and antimeridian handling as route
+deduplication. It unions all available geographic history regardless of activity
+kind and computes asymmetric candidate coverage. No usable geometry is explicit
+insufficient history, not assumed novelty.

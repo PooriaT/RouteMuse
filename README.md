@@ -83,7 +83,9 @@ Synchronize one inclusive calendar-date range with `POST /api/v1/strava/sync`:
 
 All three fields are required. `timezone` must be an IANA timezone; there is no server-timezone fallback. RouteMuse interprets the start as local midnight and the end as inclusive through that local calendar day. It queries Strava using the corresponding UTC lower bound and the exclusive next-local-midnight upper bound, so daylight-saving transitions are preserved.
 
-The request runs synchronously and returns page, fetch, insert, update, and unsupported-sport counts. Activities are committed one provider page at a time and upserted by the existing connection/activity uniqueness rule. An empty range is successful. If a later page fails, the controlled error includes a `partial` synchronization result while earlier pages remain committed. Authentication, timeouts, temporary provider failures, malformed responses, and rate limits have distinct safe error codes; rate-limit responses include usable `Retry-After` metadata when Strava supplies it.
+The request runs synchronously and returns page, fetch, insert, update, and unsupported-sport counts. The same summary pages persist Strava's nullable `map.summary_polyline` without per-activity detail or stream requests. RouteMuse keeps only this privacy-reduced geometry and never reconstructs hidden portions, infers home coordinates, reverse-geocodes history, or stores raw activity payloads. Activities are committed one provider page at a time and upserted by the existing connection/activity uniqueness rule. An empty range is successful. If a later page fails, the controlled error includes a `partial` synchronization result while earlier pages remain committed. Authentication, timeouts, temporary provider failures, malformed responses, and rate limits have distinct safe error codes; rate-limit responses include usable `Retry-After` metadata when Strava supplies it.
+
+Rows imported before geometry support remain valid with null geometry; no background network backfill runs. Re-synchronize an older bounded date range to populate geometry where Strava returns it.
 
 ### Athlete profile
 

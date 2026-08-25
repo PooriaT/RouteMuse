@@ -25,6 +25,7 @@ def _activity_payload(activity_id: int = 123) -> dict[str, object]:
         "distance": 12_345.6,
         "total_elevation_gain": 789.1,
         "ignored_provider_field": "ignored",
+        "map": {"summary_polyline": "encoded", "id": "ignored"},
     }
 
 
@@ -53,6 +54,26 @@ def test_activity_page_uses_typed_dto_and_expected_query_contract() -> None:
     assert len(result) == 1
     assert result[0].id == 123
     assert result[0].sport_type == "Run"
+    assert result[0].map is not None
+    assert result[0].map.summary_polyline == "encoded"
+
+
+@pytest.mark.parametrize("map_value", [None, {"summary_polyline": None}])
+def test_activity_page_allows_absent_summary_geometry(map_value: object) -> None:
+    payload = _activity_payload()
+    if map_value is None:
+        payload.pop("map")
+    else:
+        payload["map"] = map_value
+    client = StravaClient(
+        httpx.AsyncClient(
+            transport=httpx.MockTransport(lambda _: httpx.Response(200, json=[payload]))
+        )
+    )
+    activity = asyncio.run(
+        client.list_activities_page("secret", after=1, before=2, page=1, per_page=10)
+    )[0]
+    assert activity.map is None or activity.map.summary_polyline is None
 
 
 @pytest.mark.parametrize(

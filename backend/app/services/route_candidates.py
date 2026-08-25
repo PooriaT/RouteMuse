@@ -1,7 +1,6 @@
 """Deterministic, provider-neutral orchestration of factual route candidates."""
 
 from hashlib import sha256
-from math import atan2, cos, degrees, hypot, radians, sin
 from uuid import NAMESPACE_URL, uuid5
 
 from app.domain.planning import RoutePlanningRequest
@@ -16,6 +15,7 @@ from app.domain.routes import (
 )
 from app.integrations.contracts import RoutingProvider
 from app.integrations.routing.errors import NoRouteFoundError
+from app.services.geometry_cells import geometry_cells, shared_projection_origin
 
 GENERATION_ALGORITHM_VERSION = "routemuse-round-trip-v1"
 DESIRED_CANDIDATES = 4
@@ -24,8 +24,6 @@ ROUND_TRIP_POINTS = 4
 TARGET_DISTANCE_FACTORS = (1.0, 0.9, 1.1, 0.95, 1.05)
 # The hosted ORS Directions service rejects round trips above this request length.
 MAX_EFFECTIVE_TARGET_DISTANCE_METERS = 100_000.0
-GEOMETRY_SAMPLE_INTERVAL_METERS = 50.0
-GEOMETRY_CELL_SIZE_METERS = 40.0
 ROUTE_SIMILARITY_THRESHOLD = 0.8
 
 
@@ -173,72 +171,11 @@ async def generate_route_candidates(
 
 def geometries_are_similar(first: GeoJsonLineString, second: GeoJsonLineString) -> bool:
     """Compare direction-independent, tolerance-buffered sampled spatial cells."""
-    coordinates = [*first.coordinates, *second.coordinates]
-    reference_latitude = sum(point[1] for point in coordinates) / len(coordinates)
-    # A circular mean supplies a shared, order-independent origin near the route,
-    # including when its longitudes straddle the antimeridian.
-    longitude_radians = [radians(point[0]) for point in coordinates]
-    reference_longitude = degrees(
-        atan2(
-            sum(sin(longitude) for longitude in longitude_radians),
-            sum(cos(longitude) for longitude in longitude_radians),
-        )
-    )
-    cells_a = _geometry_cells(first, reference_latitude, reference_longitude)
-    cells_b = _geometry_cells(second, reference_latitude, reference_longitude)
+    reference_latitude, reference_longitude = shared_projection_origin([first, second])
+    cells_a = geometry_cells(first, reference_latitude, reference_longitude)
+    cells_b = geometry_cells(second, reference_latitude, reference_longitude)
     union = cells_a | cells_b
     return (
         bool(union)
         and len(cells_a & cells_b) / len(union) >= ROUTE_SIMILARITY_THRESHOLD
     )
-
-
-def _geometry_cells(
-    geometry: GeoJsonLineString,
-    reference_latitude: float,
-    reference_longitude: float,
-) -> set[tuple[int, int]]:
-    longitude_scale = 111_320.0 * cos(radians(reference_latitude))
-    projected = [
-        (
-            _wrapped_longitude_delta(point[0], reference_longitude)
-            * longitude_scale,
-            (point[1] - reference_latitude) * 110_540.0,
-        )
-        for point in geometry.coordinates
-    ]
-    sampled = _resample(projected)
-    cells: set[tuple[int, int]] = set()
-    for x, y in sampled:
-        # Nearest-cell assignment avoids splitting two close routes merely because
-        # the shared local origin lies between them on a cell boundary.
-        cell_x = round(x / GEOMETRY_CELL_SIZE_METERS)
-        cell_y = round(y / GEOMETRY_CELL_SIZE_METERS)
-        # A one-cell halo makes the comparison robust near cell boundaries.
-        cells.update(
-            (cell_x + dx, cell_y + dy) for dx in (-1, 0, 1) for dy in (-1, 0, 1)
-        )
-    return cells
-
-
-def _wrapped_longitude_delta(longitude: float, reference: float) -> float:
-    """Return the shortest signed longitude delta, unwrapping at ±180 degrees."""
-    return (longitude - reference + 180.0) % 360.0 - 180.0
-
-
-def _resample(points: list[tuple[float, float]]) -> list[tuple[float, float]]:
-    sampled = [points[0]]
-    carry = 0.0
-    for start, end in zip(points, points[1:], strict=False):
-        dx, dy = end[0] - start[0], end[1] - start[1]
-        length = hypot(dx, dy)
-        if not length:
-            continue
-        distance = GEOMETRY_SAMPLE_INTERVAL_METERS - carry
-        while distance <= length:
-            ratio = distance / length
-            sampled.append((start[0] + dx * ratio, start[1] + dy * ratio))
-            distance += GEOMETRY_SAMPLE_INTERVAL_METERS
-        carry = (carry + length) % GEOMETRY_SAMPLE_INTERVAL_METERS
-    sampled.append(points[-1])
-    return sampled

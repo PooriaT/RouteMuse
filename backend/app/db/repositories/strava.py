@@ -13,6 +13,8 @@ from app.db.models import (
 )
 from app.db.security import TokenProtectionError
 from app.domain.activities import ActivityKind
+from app.domain.history import HistoricalActivityGeometry, HistoricalGeometryHistory
+from app.services.encoded_polyline import decode_summary_polyline
 
 
 @dataclass(frozen=True)
@@ -30,6 +32,7 @@ class StravaActivityUpsert:
     moving_time_seconds: int
     distance_meters: float
     elevation_gain_meters: float | None
+    summary_polyline: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -196,6 +199,7 @@ class StravaSynchronizationRepository:
                         moving_time_seconds=incoming.moving_time_seconds,
                         distance_meters=incoming.distance_meters,
                         elevation_gain_meters=incoming.elevation_gain_meters,
+                        summary_polyline=incoming.summary_polyline,
                         synchronized_at=synchronized_at,
                     )
                 )
@@ -211,6 +215,7 @@ class StravaSynchronizationRepository:
             stored.moving_time_seconds = incoming.moving_time_seconds
             stored.distance_meters = incoming.distance_meters
             stored.elevation_gain_meters = incoming.elevation_gain_meters
+            stored.summary_polyline = incoming.summary_polyline
             stored.synchronized_at = synchronized_at
             if incoming.normalized_kind is not None:
                 updated += 1
@@ -263,6 +268,55 @@ class StravaSynchronizationRepository:
     def rollback(self) -> None:
         self._session.rollback()
 
+    def load_historical_geometries(
+        self,
+        *,
+        started_at: datetime,
+        ended_at_exclusive: datetime,
+    ) -> HistoricalGeometryHistory:
+        """Load one athlete's provider geometry inside an explicit time window."""
+        if (
+            started_at.tzinfo is None
+            or ended_at_exclusive.tzinfo is None
+            or started_at >= ended_at_exclusive
+        ):
+            raise ValueError("historical geometry bounds must be aware and increasing")
+        connection_id = self.current_connection_id()
+        if connection_id is None:
+            return HistoricalGeometryHistory(eligible_activity_count=0, geometries=[])
+        rows = list(
+            self._session.scalars(
+                select(StravaActivity)
+                .where(
+                    StravaActivity.connection_id == connection_id,
+                    StravaActivity.started_at >= started_at,
+                    StravaActivity.started_at < ended_at_exclusive,
+                )
+                .order_by(StravaActivity.started_at, StravaActivity.id)
+            )
+        )
+        geometries: list[HistoricalActivityGeometry] = []
+        for row in rows:
+            if row.summary_polyline is None:
+                continue
+            try:
+                geometry = decode_summary_polyline(row.summary_polyline)
+            except ValueError:
+                # Provider geometry that cannot form a canonical line is not evidence.
+                continue
+            geometries.append(
+                HistoricalActivityGeometry(
+                    external_id=str(row.strava_activity_id),
+                    activity_kind=row.normalized_kind,
+                    started_at=row.started_at,
+                    geometry=geometry,
+                )
+            )
+        return HistoricalGeometryHistory(
+            eligible_activity_count=len(rows),
+            geometries=geometries,
+        )
+
 
 def _activity_changed(
     stored: StravaActivity, incoming: StravaActivityUpsert
@@ -274,4 +328,5 @@ def _activity_changed(
         or stored.moving_time_seconds != incoming.moving_time_seconds
         or stored.distance_meters != incoming.distance_meters
         or stored.elevation_gain_meters != incoming.elevation_gain_meters
+        or stored.summary_polyline != incoming.summary_polyline
     )

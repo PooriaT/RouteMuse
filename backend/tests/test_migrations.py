@@ -28,6 +28,7 @@ def test_alembic_environment_loads_without_database_connection() -> None:
     assert "uq_strava_activities_connection_activity" in result.stdout
     assert "DELETE FROM strava_connections" in result.stdout
     assert "uq_strava_connections_singleton" in result.stdout
+    assert "ADD COLUMN summary_polyline TEXT" in result.stdout
 
 
 def test_revision_chain_and_safe_postgis_downgrade() -> None:
@@ -54,6 +55,15 @@ def test_single_connection_revision_is_importable_and_chained() -> None:
 
     assert revision.revision == "0003"
     assert revision.down_revision == "0002"
+
+
+def test_summary_polyline_revision_is_importable_chained_and_reversible() -> None:
+    revision = importlib.import_module(
+        "migrations.versions.0004_add_strava_summary_polyline"
+    )
+
+    assert revision.revision == "0004"
+    assert revision.down_revision == "0003"
 
 
 def test_alembic_configuration_defers_database_url_to_application_settings() -> None:

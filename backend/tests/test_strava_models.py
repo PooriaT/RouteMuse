@@ -1,4 +1,4 @@
-from sqlalchemy import BigInteger, CheckConstraint, DateTime, UniqueConstraint
+from sqlalchemy import BigInteger, CheckConstraint, DateTime, Text, UniqueConstraint
 
 from app.db.base import Base
 from app.db.models import (
@@ -55,8 +55,11 @@ def test_activity_retains_provider_sport_and_allows_unknown_normalization() -> N
 
     assert table.c.sport_type.nullable is False
     assert table.c.normalized_kind.nullable is True
+    assert table.c.summary_polyline.nullable is True
+    assert isinstance(table.c.summary_polyline.type, Text)
     assert unsupported_activity.sport_type == "Velomobile"
     assert unsupported_activity.normalized_kind is None
+    assert unsupported_activity.summary_polyline is None
     assert {
         "ix_strava_activities_connection_id",
         "ix_strava_activities_started_at",

@@ -207,6 +207,7 @@ def _activity(
     *,
     sport_type: str = "Run",
     distance: float = 1_000.0,
+    summary_polyline: str | None = None,
 ) -> StravaActivityDTO:
     return StravaActivityDTO(
         id=activity_id,
@@ -215,6 +216,7 @@ def _activity(
         moving_time=600,
         distance=distance,
         total_elevation_gain=25.0,
+        map={"summary_polyline": summary_polyline},
     )
 
 
@@ -536,6 +538,46 @@ def test_repository_upsert_counts_insert_update_unchanged_and_unsupported() -> N
     assert (changed.inserted, changed.updated) == (0, 1)
     assert stored.distance_meters == 1_500.0
 
+    geometry_changed = repository.upsert_page(
+        connection_id=42,
+        activities=[
+            _upsert(
+                1,
+                normalized_kind=ActivityKind.RUNNING,
+                distance=1_500.0,
+                summary_polyline="encoded",
+            )
+        ],
+    )
+    idempotent = repository.upsert_page(
+        connection_id=42,
+        activities=[
+            _upsert(
+                1,
+                normalized_kind=ActivityKind.RUNNING,
+                distance=1_500.0,
+                summary_polyline="encoded",
+            )
+        ],
+    )
+    assert geometry_changed.updated == 1
+    assert idempotent.updated == 0
+    assert stored.summary_polyline == "encoded"
+
+
+def test_synchronization_translates_summary_polyline_without_extra_calls() -> None:
+    repository = InMemorySynchronizationRepository()
+    client = FakeStravaClient(
+        {1: [_activity(1, summary_polyline="encoded"), _activity(2)], 2: []}
+    )
+
+    result = _synchronize(_service(repository, client))
+
+    assert result.inserted == 2
+    assert repository.activities[1].summary_polyline == "encoded"
+    assert repository.activities[2].summary_polyline is None
+    assert [call["page"] for call in client.calls] == [1, 2]
+
 
 def _upsert(
     activity_id: int,
@@ -543,6 +585,7 @@ def _upsert(
     normalized_kind: ActivityKind | None,
     sport_type: str = "Run",
     distance: float = 1_000.0,
+    summary_polyline: str | None = None,
 ) -> StravaActivityUpsert:
     return StravaActivityUpsert(
         strava_activity_id=activity_id,
@@ -552,4 +595,5 @@ def _upsert(
         moving_time_seconds=600,
         distance_meters=distance,
         elevation_gain_meters=25.0,
+        summary_polyline=summary_polyline,
     )
