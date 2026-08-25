@@ -197,3 +197,23 @@ def test_llm_protocol_accepts_only_reasoning_context() -> None:
     assert hints["context"] is RecommendationReasoningContext
     assert "candidate" not in hints
     assert "athlete" not in hints
+
+
+def test_breakdowns_use_comparable_route_share_before_truncation() -> None:
+    recommendation, request, profile = inputs()
+    route = recommendation.candidate.model_copy(
+        update={
+            "surface_breakdown": [
+                *[
+                    SurfaceSummary(value=f"tiny-{index}", distance_meters=1.0)
+                    for index in range(MAX_BREAKDOWN_ENTRIES)
+                ],
+                SurfaceSummary(value="dominant", proportion=0.9),
+            ]
+        }
+    )
+    context = build_reasoning_context(
+        recommendation.model_copy(update={"candidate": route}), request, profile
+    )
+    assert context.route_facts.surfaces[0].value == "dominant"
+    assert len(context.route_facts.surfaces) == MAX_BREAKDOWN_ENTRIES

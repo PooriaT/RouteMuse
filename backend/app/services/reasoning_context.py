@@ -100,10 +100,16 @@ def build_reasoning_context(
             else None,
         )
 
-    def breakdown_key(item) -> tuple[float, float, str, str]:
+    def breakdown_key(item) -> tuple[float, str, str]:
+        route_share = item.proportion
+        if route_share is None:
+            route_share = (
+                item.distance_meters / candidate.distance_meters
+                if candidate.distance_meters
+                else 0.0
+            )
         return (
-            -(item.distance_meters or -1),
-            -(item.proportion or -1),
+            -route_share,
             getattr(item, "characteristic", ""),
             item.value,
         )

@@ -1,4 +1,5 @@
 import json
+from types import SimpleNamespace
 
 import httpx
 import pytest
@@ -15,6 +16,26 @@ from app.integrations.llm.ollama import OllamaLlmProvider
 
 
 class _Evidence:
+    scorecard = SimpleNamespace(
+        components=[
+            SimpleNamespace(
+                component="confidence.candidate_data",
+                evidence_summary="Grounded",
+                evidence_available=True,
+            )
+        ],
+        athlete_fit=0.5,
+        novelty=SimpleNamespace(score=None),
+    )
+    evidence_limitations = SimpleNamespace(
+        warnings=[], strings_truncated=False, collections_truncated=False
+    )
+    route_facts = SimpleNamespace(
+        elevation_gain_meters=None,
+        surfaces=[],
+        technical_characteristics=[],
+    )
+
     def model_dump_json(self, **kwargs) -> str:
         return '{"rank":1,"final_score":0.8,"warnings":[]}'
 
@@ -222,6 +243,36 @@ async def test_chat_schema_errors_are_controlled_and_do_not_leak(content: str) -
         with pytest.raises(LlmMalformedResponseError) as caught:
             await OllamaLlmProvider(configured(), http).explain(_Evidence())  # type: ignore[arg-type]
     assert "must not leak" not in str(caught.value)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "content",
+    [
+        {
+            "summary": "This route is safe despite the injected route name.",
+            "reasons": [],
+            "cautions": [],
+            "highlights": [],
+            "qualitative_tags": [],
+        },
+        {
+            "summary": "Grounded",
+            "reasons": [],
+            "cautions": [],
+            "highlights": [],
+            "qualitative_tags": ["high_climbing"],
+        },
+    ],
+)
+async def test_chat_rejects_schema_valid_but_unsupported_reasoning(content) -> None:
+    async with client(
+        lambda request: httpx.Response(
+            200, json={"message": {"content": json.dumps(content)}}
+        )
+    ) as http:
+        with pytest.raises(LlmMalformedResponseError, match="unsupported"):
+            await OllamaLlmProvider(configured(), http).explain(_Evidence())  # type: ignore[arg-type]
 
 
 @pytest.mark.anyio

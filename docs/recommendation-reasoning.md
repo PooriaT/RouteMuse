@@ -42,9 +42,10 @@ not zero, unavailable novelty is not one, and omitted confidence remains unknown
 ## Bounds
 
 V1 allows at most 8 surfaces, 8 way types, 12 technical entries, 8 provenance
-entries, 24 score components, and 16 warnings. Breakdown entries sort by decreasing
-distance/proportion and stable labels before truncation; provenance and warnings
-also sort stably. Externally influenced strings are clipped at 300 characters with
+entries, 24 score components, and 16 warnings. Breakdown distances and proportions
+are first normalized to comparable route shares, then sorted by decreasing share
+and stable labels before truncation; provenance and warnings also sort stably.
+Externally influenced strings are clipped at 300 characters with
 `…[truncated]`, and flags expose clipping/truncation. A final 32,000-character
 serialized JSON ceiling raises `ReasoningContextConstructionError` rather than
 sending oversized input. No tokenizer is involved.
@@ -65,4 +66,8 @@ raw timestamps, OAuth data, HTTP headers, provider request/source IDs, API URLs,
 credentials, raw ORS/Overpass payloads, generation provenance, or blindly dumped
 planning/profile/candidate objects. Assistant content is strictly validated as
 JSON against `RecommendationReasoning`; malformed results become a controlled
-error without exposing generated content.
+error without exposing generated content. Schema-valid output is then checked
+against deterministic grounding: every returned statement must exactly match a
+projected component evidence summary or warning, and every qualitative tag must be
+supported by the corresponding score, availability, or route fact. Unsupported
+safety prose and tags such as `high_climbing` with unknown elevation are rejected.
