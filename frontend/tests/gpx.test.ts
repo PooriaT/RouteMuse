@@ -60,7 +60,7 @@ describe("downloadGpx", () => {
     expect(blob).toBeInstanceOf(Blob);
     expect(blob.type).toBe("application/gpx+xml");
     const anchor = append.mock.calls[0][0] as HTMLAnchorElement;
-    expect(anchor.download).toBe("routemuse-creek-ridge-loop.gpx");
+    expect(anchor.download).toBe("routemuse-creek-ridge-loop-1.gpx");
     expect(anchor.href).toBe("blob:gpx");
     expect(click).toHaveBeenCalledOnce();
     expect(revokeObjectURL).toHaveBeenCalledWith("blob:gpx");
@@ -76,5 +76,6 @@ describe("downloadGpx", () => {
   it("sanitizes paths and has a stable fallback", () => {
     expect(gpxFilename("../A / Route???")).toBe("routemuse-a-route.gpx");
     expect(gpxFilename("///", 3)).toBe("routemuse-route-3.gpx");
+    expect(gpxFilename("Shared provider name", 1)).not.toBe(gpxFilename("Shared provider name", 2));
   });
 });

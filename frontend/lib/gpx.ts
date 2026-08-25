@@ -49,7 +49,8 @@ ${trackPoints}
 
 export function gpxFilename(candidateName: string, rank?: number) {
   const safeName = candidateName.normalize("NFKD").replace(/[\u0000-\u001f\u007f]/g, " ").replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-+|-+$/g, "").toLowerCase();
-  return `routemuse-${safeName || `route${rank ? `-${rank}` : ""}`}.gpx`;
+  const rankSuffix = rank === undefined ? "" : `-${rank}`;
+  return `routemuse-${safeName || "route"}${rankSuffix}.gpx`;
 }
 
 /** Download a pre-existing candidate; this performs no network or routing work. */
