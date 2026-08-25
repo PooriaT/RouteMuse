@@ -540,7 +540,7 @@ describe("PlannerForm", () => {
     expect(screen.getByRole("option", { name: "Trail Running" })).toHaveValue(
       "trail_running",
     );
-    expect(screen.getByText(/Optional values stay empty/)).toBeInTheDocument();
+    expect(screen.getByText(/Optional values may stay empty/)).toBeInTheDocument();
   });
 
   it("rejects missing required inputs and non-positive effort values locally", () => {
@@ -613,7 +613,7 @@ describe("PlannerForm", () => {
       end_date: "2026-08-19",
       timezone: expect.any(String),
     });
-    expect(screen.getByText(/Map is not configured/)).toBeInTheDocument();
+    expect(screen.getByText(/No recommendations were returned/)).toBeInTheDocument();
   });
 
   it("ignores a recommendation response after a material input changes", async () => {

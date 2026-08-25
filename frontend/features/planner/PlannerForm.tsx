@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 
 import { ApiError, api } from "@/lib/api/client";
-import { RouteMap } from "@/features/recommendations/RouteMap";
+import { RecommendationExperience } from "@/features/recommendations/RecommendationExperience";
 import type { ActivityType } from "@/types/activity";
 import type {
   ActivityKind,
@@ -73,6 +73,7 @@ export function PlannerForm({
   const [planningStatus, setPlanningStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [recommendationResult, setRecommendationResult] = useState<RecommendationResult | null>(null);
   const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null);
+  const [recommendationCanRetry, setRecommendationCanRetry] = useState(false);
   const profileRequestSequence = useRef(0);
   const recommendationRequestSequence = useRef(0);
   const selectedProfileRequest = useRef<AthleteProfileRequest | null>(null);
@@ -215,6 +216,7 @@ export function PlannerForm({
     setRecommendationResult(null);
     setSelectedCandidateId(null);
     setRecommendationError(null);
+    setRecommendationCanRetry(false);
     setPlanningStatus("idle");
   };
 
@@ -272,7 +274,7 @@ export function PlannerForm({
       });
       if (sequence !== recommendationRequestSequence.current) return;
       setRecommendationResult(result);
-      setSelectedCandidateId(result.recommendations.find(({ rank }) => rank === 1)?.candidate.id ?? null);
+      setSelectedCandidateId(result.recommendations[0]?.candidate.id ?? null);
       setPlanningStatus("ready");
     } catch (error) {
       if (sequence !== recommendationRequestSequence.current) return;
@@ -280,6 +282,7 @@ export function PlannerForm({
       setSelectedCandidateId(null);
       setPlanningStatus("error");
       setRecommendationError(recommendationErrorMessage(error));
+      setRecommendationCanRetry(isTransientRecommendationError(error));
     }
   };
   const [recommendationError, setRecommendationError] = useState<string | null>(null);
@@ -290,8 +293,8 @@ export function PlannerForm({
         <p className="font-semibold text-emerald-700">RouteMuse</p>
         <h1 className="text-4xl font-bold">Plan your next outdoor route</h1>
         <p className="mt-3 max-w-2xl text-slate-600">
-          Start with your activity history, then add preferences to receive future
-          provider-backed route recommendations.
+          Start with your activity history, add your preferences, and explore personalized,
+          provider-grounded route recommendations.
         </p>
         <ol aria-label="Planner workflow" className="mt-5 grid gap-2 text-sm text-slate-600 sm:grid-cols-5">
           <li><strong>1.</strong> Historical range</li>
@@ -393,47 +396,42 @@ export function PlannerForm({
           <label>Route shape, optional<select value={effortPreferences.routeShape ?? ""} onChange={(event) => updateEffortPreference("routeShape", (event.target.value || null) as RouteShape | null)}><option value="">Any shape</option><option value="loop">Loop</option><option value="out_and_back">Out-and-back</option><option value="point_to_point">Point-to-point</option></select></label>
           <label className="md:col-span-2">Novelty preference, optional<span className="text-xs font-normal text-slate-500">Choose whether you prefer known areas or something new.</span><select value={effortPreferences.noveltyPreference ?? ""} onChange={(event) => updateEffortPreference("noveltyPreference", (event.target.value || null) as NoveltyPreference | null)}><option value="">No preference</option><option value="familiar">Prefer familiar</option><option value="balanced">Balanced</option><option value="novel">Prefer something new</option></select></label>
         </fieldset>
-        <p id="preferences-status" className="mt-4 text-sm text-slate-500">Optional values stay empty so a future planning service can infer them from your profile.</p>
+        <p id="preferences-status" className="mt-4 text-sm text-slate-500">Optional values may stay empty so RouteMuse can use your athlete profile where supported.</p>
         {activityTypesUnavailable && (
           <p role="status" className="mt-2 text-sm text-amber-700">Activity types are temporarily unavailable. Try again when the RouteMuse API is running.</p>
         )}
         <button type="button" disabled={planningStatus === "loading"} aria-busy={planningStatus === "loading"} onClick={() => void generateRecommendations()} className="mt-4 rounded bg-emerald-700 px-4 py-3 font-semibold text-white disabled:opacity-60">{planningStatus === "loading" ? "Generating recommendations…" : "Generate recommendations"}</button>
-        {planningStatus === "loading" && <p role="status" className="mt-3 text-sm text-slate-600">Generating provider-backed route recommendations…</p>}
-        {planningStatus === "error" && <p role="alert" className="mt-3 text-sm font-medium text-red-700">{recommendationError ?? "Recommendations could not be generated. Review the inputs and try again."}</p>}
+        {planningStatus === "loading" && <p role="status" aria-live="polite" className="mt-3 text-sm text-slate-600">Finding and ranking routes for your preferences…</p>}
+        {planningStatus === "error" && <div className="mt-3"><p role="alert" className="text-sm font-medium text-red-700">{recommendationError ?? "Recommendations could not be generated. Review the inputs and try again."}</p>{recommendationCanRetry && <button type="button" className="mt-3 rounded border border-emerald-700 px-3 py-2 font-semibold text-emerald-800" onClick={() => void generateRecommendations()}>Retry recommendations</button>}</div>}
       </section>
 
       <section aria-labelledby="recommendations-heading" aria-busy={planningStatus === "loading"} className="rounded-xl border-2 border-dashed border-emerald-200 p-8">
         <h2 id="recommendations-heading" className="text-xl font-bold">Recommendations</h2>
-        {!recommendationResult && <p className="mt-2 text-slate-600">No recommendations yet. Generate routes from your planning preferences.</p>}
-        {recommendationResult && <div className="mt-4">
-          <RouteMap recommendations={recommendationResult.recommendations} selectedCandidateId={selectedCandidateId} onSelectCandidate={setSelectedCandidateId} />
-          <ProviderAttribution result={recommendationResult} selectedCandidateId={selectedCandidateId} />
-        </div>}
+        {!recommendationResult && planningStatus !== "loading" && <p className="mt-2 text-slate-600">No recommendations yet. Generate routes from your planning preferences.</p>}
+        {planningStatus === "loading" && <p className="mt-2 text-slate-600" role="status" aria-live="polite">Your planner inputs remain available while RouteMuse builds the recommendation scorecards.</p>}
+        {recommendationResult && <RecommendationExperience result={recommendationResult} selectedCandidateId={selectedCandidateId} onSelectCandidate={setSelectedCandidateId} />}
       </section>
     </main>
   );
 }
 
-function ProviderAttribution({ result, selectedCandidateId }: { result: RecommendationResult; selectedCandidateId: string | null }) {
-  const selected = result.recommendations.find(({ candidate }) => candidate.id === selectedCandidateId);
-  const attributions = [...new Set(selected?.candidate.provenance.map(({ attribution }) => attribution) ?? [])];
-  if (!attributions.length) return null;
-  return <p className="mt-3 text-sm text-slate-600">Route data: {attributions.join(" · ")}</p>;
-}
-
-function recommendationErrorMessage(error: unknown) {
+export function recommendationErrorMessage(error: unknown) {
   if (!(error instanceof ApiError)) return "Recommendations could not be generated. Try again.";
   const messages: Record<string, string> = {
     network_error: "The RouteMuse API is unavailable. Check your connection and try again.",
     strava_connection_required: "Connect Strava before generating personalized recommendations.",
-    athlete_profile_history_incomplete: "Finish importing the selected activity period before generating recommendations.",
+    athlete_profile_history_incomplete: "Complete the interrupted Strava import first.",
     recommendation_target_unavailable: "Add a target distance or import enough matching activity history.",
     personalized_recommendations_unavailable: "Personalized recommendations are temporarily unavailable.",
     unsupported_activity: "The selected activity is not supported by the current route provider.",
-    route_provider_rate_limited: "The route provider is busy. Wait a moment and try again.",
-    route_provider_unavailable: "The route provider is temporarily unavailable. Try again later.",
+    route_provider_rate_limited: "Route generation is temporarily rate limited.",
+    route_provider_unavailable: "Route generation is temporarily unavailable.",
   };
   return (error.code && messages[error.code]) || "Recommendations could not be generated. Review the inputs and try again.";
+}
+
+export function isTransientRecommendationError(error: unknown) {
+  return !(error instanceof ApiError) || error.status === 0 || ["network_error", "personalized_recommendations_unavailable", "route_provider_rate_limited", "route_provider_unavailable"].includes(error.code ?? "");
 }
 
 function profileErrorMessage(error: unknown) {

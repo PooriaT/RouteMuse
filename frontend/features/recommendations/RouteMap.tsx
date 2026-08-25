@@ -87,7 +87,7 @@ export function RouteMap({ recommendations, selectedCandidateId, onSelectCandida
 
   if (!styleUrl) return <MapMessage>Map is not configured. Set NEXT_PUBLIC_MAP_STYLE_URL to display route geometry.</MapMessage>;
   if (failure) return <MapMessage alert>{failure}</MapMessage>;
-  return <div ref={containerRef} className="route-map" role="img" aria-label="Interactive map showing all ranked route candidates. Routes may be selected on the map; detailed accessible selection will be added with recommendation cards." />;
+  return <div ref={containerRef} className="route-map" role="img" aria-label="Interactive map showing all ranked route candidates. Select a route here or with its card." />;
 }
 
 function MapMessage({ children, alert = false }: { children: React.ReactNode; alert?: boolean }) {
