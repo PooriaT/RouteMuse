@@ -210,7 +210,7 @@ poetry run uvicorn app.main:app --reload
 
 ## Current limitations and next integrations
 
-RouteMuse still has no user-account system, multi-route comparison, GPX export, route editing, or route saving. The factual route-candidate endpoint remains deliberately unranked, while the separate recommendation endpoint applies deterministic personalized scoring to copied candidate data. Strava OAuth credentials are connected and encrypted server-side; historical activities can be synchronized idempotently, and exact `sport_type` values are normalized at the integration boundary while unsupported values remain identifiable.
+RouteMuse still has no user-account system, GPX export, route editing, or route saving. Athletes can select two or three returned recommendations for an accessible, responsive side-by-side comparison of route facts, technical characteristics, existing scores, warnings, reasoning, and provider metadata; comparison never recalculates or changes the server ranking. The factual route-candidate endpoint remains deliberately unranked, while the separate recommendation endpoint applies deterministic personalized scoring to copied candidate data. Strava OAuth credentials are connected and encrypted server-side; historical activities can be synchronized idempotently, and exact `sport_type` values are normalized at the integration boundary while unsupported values remain identifiable.
 
 
 ### Personalized recommendations
