@@ -190,7 +190,12 @@ Configure a replaceable basemap style with
 generation and results remain usable while the map shows a controlled fallback.
 MapLibre keeps style/source attribution visible, while the selected route's
 deduplicated provider attribution is rendered separately below the map. RouteMuse
-does not reroute, recalculate geometry, or rank candidates in the browser.
+does not reroute, recalculate geometry, or rank candidates in the browser. Each
+recommendation can be downloaded as a GPX 1.1 track. Export serializes the
+provider-grounded geometry already shown for that recommendation, preserves
+available point elevation and attribution, and does not fabricate track-point
+timestamps. Downloading is entirely client-side and makes no external provider or
+backend request.
 
 | Command | Purpose |
 |---|---|
@@ -210,7 +215,7 @@ poetry run uvicorn app.main:app --reload
 
 ## Current limitations and next integrations
 
-RouteMuse still has no user-account system, GPX export, route editing, or route saving. Athletes can select two or three returned recommendations for an accessible, responsive side-by-side comparison of route facts, technical characteristics, existing scores, warnings, reasoning, and provider metadata; comparison never recalculates or changes the server ranking. The factual route-candidate endpoint remains deliberately unranked, while the separate recommendation endpoint applies deterministic personalized scoring to copied candidate data. Strava OAuth credentials are connected and encrypted server-side; historical activities can be synchronized idempotently, and exact `sport_type` values are normalized at the integration boundary while unsupported values remain identifiable.
+RouteMuse still has no user-account system, route editing, or route saving. Athletes can select two or three returned recommendations for an accessible, responsive side-by-side comparison of route facts, technical characteristics, existing scores, warnings, reasoning, and provider metadata; comparison never recalculates or changes the server ranking. The factual route-candidate endpoint remains deliberately unranked, while the separate recommendation endpoint applies deterministic personalized scoring to copied candidate data. Strava OAuth credentials are connected and encrypted server-side; historical activities can be synchronized idempotently, and exact `sport_type` values are normalized at the integration boundary while unsupported values remain identifiable.
 
 
 ### Personalized recommendations
