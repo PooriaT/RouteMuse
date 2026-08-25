@@ -184,3 +184,69 @@ No component infers popularity, ratings, scenery, viewpoint quality, crowds, or
 “hidden gem” status. Names and relation memberships are factual geographic
 content only. The shape component does not inspect the user's requested shape;
 preference alignment and final ranking remain separate concerns.
+
+## Final recommendation ranking (`recommendation-v1`)
+
+`POST /api/v1/recommendations` accepts a nested `planning_request` and the
+inclusive `start_date`, `end_date`, and IANA `timezone` of persisted history to
+analyze. The server—not the browser—loads the current connection's history,
+rejects unresolved partial synchronization, calculates the athlete profile, and
+loads summary-polyline geometry for the same UTC-resolved calendar bounds.
+
+The deterministic pipeline is:
+
+```text
+factual ORS candidates + one optional bounded Overpass discovery + saved geometry
+  -> difficulty -> athlete fit -> novelty -> excitement
+  -> explicit preference alignment -> confidence -> ranking -> diversity
+```
+
+No LLM participates. The result exposes the factual candidate and complete
+difficulty, athlete-fit, novelty, excitement, preference-alignment, confidence,
+and final scorecard for every selected route.
+
+If distance was explicit it is retained. Otherwise the existing athlete-fit
+resolver chooses p25/median/p90 matching-activity distance for easy/moderate/hard
+(median with no challenge). With no matching summary, the operation fails with
+`recommendation_target_unavailable`; there is no arbitrary default. Candidates
+without a scored matching-activity athlete fit are excluded rather than assigned
+a fabricated neutral fit.
+
+### Preference alignment
+
+Distance and duration use the symmetric bounded closeness
+`1 - |actual-target| / max(actual,target)`. Missing candidate duration is
+unavailable. Challenge compares difficulty to the existing 0.25/0.50/0.80
+anchors with a 0.50 linear tolerance. An exact requested shape scores one and a
+mismatch zero. Familiar novelty uses `1-novelty`, novel uses `novelty`, and
+balanced peaks at documented midpoint 0.50 and falls linearly to zero at either
+extreme. Unknown novelty is unavailable, never a match. Component heuristic
+weights are distance 30%, duration 20%, challenge 20%, shape 10%, and novelty
+20%; null user preferences are absent and available weights are renormalized.
+
+### Final score, confidence, and ordering
+
+The versioned heuristic weights are **40% athlete fit, 30% explicit preference
+alignment, 20% excitement, and 10% confidence**. They are product defaults, not
+scientifically optimal. Optional unavailable preference or excitement values are
+omitted and weights renormalized. Raw difficulty and novelty are never directly
+rewarded in this sum; they remain visible and feed relevant alignment/fit and
+excitement assessments.
+
+Confidence independently combines candidate data confidence (20%, omitted when
+unknown), athlete-fit confidence (30%), novelty-history confidence (15%),
+excitement evidence coverage (20%), and difficulty evidence coverage (15%). It
+never replaces a missing score. Stable ordering is final score descending, then
+athlete-fit score descending, then candidate UUID text ascending.
+
+After ordering, the selector keeps at most three routes. It reuses the shared
+sampled-cell Jaccard geometry comparison with a named **0.60 final diversity
+threshold**, stricter than candidate generation's 0.80 near-duplicate threshold.
+The better-ranked near duplicate is therefore always retained. It returns fewer
+rather than padding and emits `fewer_diverse_recommendations_available`.
+
+Overpass is called at most once per operation and its features are reused for all
+candidates. Timeout or temporary failure yields `trail_discovery_unavailable`,
+leaves named-content evidence unavailable, reduces evidence/confidence, and does
+not discard factual ORS routes. Rate limiting and routing failures retain their
+controlled API errors.

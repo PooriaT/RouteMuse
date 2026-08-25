@@ -1,31 +1,11 @@
 """Deterministic geographic novelty scoring from historical route geometry."""
 
-from enum import StrEnum
-
-from pydantic import BaseModel, ConfigDict, Field
-
 from app.domain.history import HistoricalGeometryHistory
+from app.domain.recommendations import NoveltyAssessment, NoveltyStatus
 from app.domain.routes import GeoJsonLineString, RouteCandidate
 from app.services.geometry_cells import geometry_cells, shared_projection_origin
 
 FULL_HISTORY_EVIDENCE_ACTIVITIES = 10
-
-
-class NoveltyStatus(StrEnum):
-    AVAILABLE = "available"
-    INSUFFICIENT_HISTORY = "insufficient_history"
-
-
-class NoveltyAssessment(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    status: NoveltyStatus
-    novelty_score: float | None = Field(default=None, ge=0, le=1)
-    confidence: float = Field(ge=0, le=1)
-    eligible_activity_count: int = Field(ge=0)
-    geometry_activity_count: int = Field(ge=0)
-    missing_geometry_activity_count: int = Field(ge=0)
-    geometry_coverage_ratio: float = Field(ge=0, le=1)
 
 
 def assess_route_novelty(

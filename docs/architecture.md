@@ -122,3 +122,16 @@ sampling, 40 m buffered cells, local projection, and antimeridian handling as ro
 deduplication. It unions all available geographic history regardless of activity
 kind and computes asymmetric candidate coverage. No usable geometry is explicit
 insufficient history, not assumed novelty.
+
+## Deterministic recommendation orchestration
+
+The recommendation application service is a provider-independent composition
+layer. It reads current persisted history for a caller-selected calendar period,
+builds the athlete profile server-side, resolves a factual generation distance,
+generates ORS candidates, loads same-period historical geometry once, and makes
+at most one bounded Overpass enrichment request. Pure scorers then produce full
+scorecards before stable sorting and shared-geometry diversity selection. The
+existing `/api/v1/route-candidates` boundary remains factual and unranked;
+`/api/v1/recommendations` owns personalization. No recommendation is persisted
+and no LLM affects scores or ordering. See `docs/recommendation-scoring.md` for
+versioned formulas and missing-evidence behavior.
