@@ -13,7 +13,9 @@ label { display: grid; gap: .35rem; font-weight: 600; }
 .select-route { flex: none; border: 1px solid #047857; border-radius: .5rem; color: #065f46; font-weight: 700; padding: .55rem .75rem; }
 .select-route[aria-pressed="true"] { background: #065f46; color: white; }
 .card-actions { display: grid; flex: none; gap: .5rem; }
-.compare-route, .view-on-map { border: 1px solid #52665e; border-radius: .5rem; font-weight: 700; padding: .55rem .75rem; }
+.compare-route, .export-route, .view-on-map { border: 1px solid #52665e; border-radius: .5rem; font-weight: 700; padding: .55rem .75rem; }
+.export-route { background: #eef8f3; color: #183d2e; }
+.route-export-error { color: #9f1239; font-size: .875rem; font-weight: 600; margin-top: .75rem; }
 .compare-route[aria-pressed="true"] { background: #e8f4ee; border-color: #047857; color: #065f46; }
 .route-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; margin-top: 1rem; }
 .route-facts div { background: #f3f7f4; border-radius: .5rem; padding: .7rem; }

@@ -6,6 +6,7 @@ import { RecommendationExperience } from "@/features/recommendations/Recommendat
 import type { RankedRecommendation, RecommendationResult, ScoreComponent } from "@/types/recommendations";
 
 vi.mock("@/features/recommendations/RouteMap", () => ({ RouteMap: ({ onSelectCandidate }: { onSelectCandidate: (id: string) => void }) => <button onClick={() => onSelectCandidate("route-two")}>Select route two on map</button> }));
+vi.mock("@/lib/gpx", () => ({ downloadGpx: vi.fn() }));
 
 const evidence: ScoreComponent = { name: "distance", score: 0.8, weight: 0.5, evidence_available: true, evidence_summary: "Near the requested distance." };
 
@@ -54,6 +55,7 @@ describe("RecommendationExperience", () => {
     expect(screen.getAllByText("Fewer distinct routes were available than requested.")).toHaveLength(2);
     expect(screen.getAllByText("Additional route information is unavailable.")).toHaveLength(2);
     expect(screen.getAllByText("Provider data")).toHaveLength(2);
+    expect(screen.getByRole("button", { name: "Download GPX for Server first" })).toBeInTheDocument();
   });
 
   it("synchronizes accessible card and map selection", () => {
