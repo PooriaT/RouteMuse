@@ -169,13 +169,15 @@ async def generate_route_candidates(
     )
 
 
-def geometries_are_similar(first: GeoJsonLineString, second: GeoJsonLineString) -> bool:
+def geometries_are_similar(
+    first: GeoJsonLineString,
+    second: GeoJsonLineString,
+    *,
+    threshold: float = ROUTE_SIMILARITY_THRESHOLD,
+) -> bool:
     """Compare direction-independent, tolerance-buffered sampled spatial cells."""
     reference_latitude, reference_longitude = shared_projection_origin([first, second])
     cells_a = geometry_cells(first, reference_latitude, reference_longitude)
     cells_b = geometry_cells(second, reference_latitude, reference_longitude)
     union = cells_a | cells_b
-    return (
-        bool(union)
-        and len(cells_a & cells_b) / len(union) >= ROUTE_SIMILARITY_THRESHOLD
-    )
+    return bool(union) and len(cells_a & cells_b) / len(union) >= threshold

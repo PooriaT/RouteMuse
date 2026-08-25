@@ -13,6 +13,7 @@ from app.api.routes.strava import (
 from app.core.config import Settings, get_settings
 from app.core.http import RedactOAuthCallbackQueryMiddleware
 from app.core.logging import configure_logging
+from app.integrations.geospatial.overpass import OverpassDiscoveryProvider
 from app.integrations.strava.errors import StravaIntegrationError
 
 
@@ -27,6 +28,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     resolved_settings = settings or get_settings()
     application = FastAPI(title=resolved_settings.app_name, lifespan=lifespan)
     application.state.settings = resolved_settings
+    application.state.overpass_discovery_provider = OverpassDiscoveryProvider(
+        resolved_settings
+    )
     application.add_middleware(
         CORSMiddleware,
         allow_origins=resolved_settings.cors_origins,

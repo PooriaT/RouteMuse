@@ -1,6 +1,6 @@
 # RouteMuse
 
-RouteMuse is a personalized outdoor route discovery and planning application. This repository establishes domain boundaries and a runnable planner shell. Its backend supports a secure Strava account connection, historical activity synchronization, and deterministic athlete-profile analysis, and provider-grounded walking and hiking routing, while scoring/ranking and LLM features remain intentionally unimplemented.
+RouteMuse is a personalized outdoor route discovery and planning application. This repository establishes domain boundaries and a runnable planner shell. Its backend supports a secure Strava account connection, historical activity synchronization, and deterministic athlete-profile analysis, and provider-grounded walking and hiking routing, with deterministic, transparent personalized scoring and diversity selection. LLM explanations remain intentionally unimplemented.
 
 ## Architecture
 
@@ -195,4 +195,16 @@ poetry run uvicorn app.main:app --reload
 
 ## Current limitations and next integrations
 
-This scaffold has no RouteMuse user authentication, route difficulty scoring, recommendation ranking, frontend map visualization, GPX, or Ollama inference. The backend can generate deterministic factual round-trip candidates, but those candidates remain deliberately unranked and every recommendation score is unset. Strava OAuth credentials are connected and encrypted server-side; historical activities can be synchronized idempotently, and exact `sport_type` values are normalized at the integration boundary while unsupported values remain identifiable. Deterministic athlete analysis is implemented and presented from persisted history. Subsequent work can add factual geospatial adapters and deterministic candidate scoring before any LLM explanation layer.
+RouteMuse still has no user-account system, frontend recommendation map, GPX export, route saving, or Ollama explanation. The factual route-candidate endpoint remains deliberately unranked, while the separate recommendation endpoint applies deterministic personalized scoring to copied candidate data. Strava OAuth credentials are connected and encrypted server-side; historical activities can be synchronized idempotently, and exact `sport_type` values are normalized at the integration boundary while unsupported values remain identifiable.
+
+
+### Personalized recommendations
+
+`POST /api/v1/recommendations` takes `planning_request`, `start_date`, `end_date`,
+and `timezone`. It loads saved athlete history server-side, infers a missing
+distance only from matching history, generates factual routes, and returns up to
+three ranked, meaningfully distinct candidates with every score assessment,
+confidence component, warning, geometry, and attribution visible. Ranking is the
+versioned deterministic `recommendation-v1` heuristic; no LLM is called. The
+existing `POST /api/v1/route-candidates` remains the unranked factual/debug API.
+See [recommendation scoring](docs/recommendation-scoring.md) for formulas.

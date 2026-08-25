@@ -273,6 +273,7 @@ class StravaSynchronizationRepository:
         *,
         started_at: datetime,
         ended_at_exclusive: datetime,
+        connection_id: int | None = None,
     ) -> HistoricalGeometryHistory:
         """Load one athlete's provider geometry inside an explicit time window."""
         if (
@@ -281,7 +282,8 @@ class StravaSynchronizationRepository:
             or started_at >= ended_at_exclusive
         ):
             raise ValueError("historical geometry bounds must be aware and increasing")
-        connection_id = self.current_connection_id()
+        if connection_id is None:
+            connection_id = self.current_connection_id()
         if connection_id is None:
             return HistoricalGeometryHistory(eligible_activity_count=0, geometries=[])
         rows = list(
