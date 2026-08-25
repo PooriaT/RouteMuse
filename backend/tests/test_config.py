@@ -63,3 +63,37 @@ def test_strava_oauth_settings_are_optional_and_client_secret_is_protected(
         "http://localhost:8000/api/v1/strava/callback"
     )
     assert "oauth-client-secret" not in repr(settings)
+
+
+@pytest.mark.parametrize(
+    ("url", "expected"),
+    [
+        ("http://localhost:11434/", "http://localhost:11434"),
+        ("http://ollama.internal:11434/base///", "http://ollama.internal:11434/base"),
+        ("https://models.example.com", "https://models.example.com"),
+    ],
+)
+def test_ollama_url_is_validated_and_normalized(url: str, expected: str) -> None:
+    assert Settings(ollama_base_url=url, _env_file=None).ollama_base_url == expected
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "localhost:11434",
+        "ftp://localhost/model",
+        "http://user:secret@localhost:11434",
+        "http://localhost:11434?token=secret",
+        "http://localhost:11434#fragment",
+        "http://localhost:99999",
+    ],
+)
+def test_ollama_url_rejects_unsafe_or_malformed_values(url: str) -> None:
+    with pytest.raises(ValidationError):
+        Settings(ollama_base_url=url, _env_file=None)
+
+
+def test_blank_ollama_configuration_is_unconfigured() -> None:
+    settings = Settings(ollama_base_url="  ", ollama_model=" \t ", _env_file=None)
+    assert settings.ollama_base_url is None
+    assert settings.ollama_model is None

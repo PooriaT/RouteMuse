@@ -71,6 +71,14 @@ Candidate `data_confidence` describes provider/data quality. The optional recomm
 
 **Ollama.** Ollama may reason over and explain already-grounded, structured candidates. It is downstream of factual providers and deterministic scoring. It is never authoritative for coordinates, route geometry, trail existence, distance, elevation, access restrictions, or safety conditions, and must not invent any of them.
 
+The optional Ollama adapter uses its native `GET /api/tags` model listing and
+non-streaming `POST /api/chat` endpoints through an injectable HTTP client.
+Server-side URL, model, and bounded timeout configuration is validated without
+contacting Ollama during startup or health checks. Ollama and the configured model
+must already be installed externally; RouteMuse never pulls models. Controlled
+errors distinguish configuration, timeouts, availability, and malformed responses,
+while deterministic recommendations remain independent.
+
 ## Application logic
 
 Round-trip candidate generation targets four distinct results in at most eight

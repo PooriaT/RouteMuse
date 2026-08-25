@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from datetime import date
 from typing import Protocol
 
@@ -29,7 +30,18 @@ class RoutingProvider(Protocol):
     async def route(self, request: RoutingRequest) -> RouteCandidate: ...
 
 
+@dataclass(frozen=True)
+class LlmProviderStatus:
+    configured: bool
+    reachable: bool
+    model_available: bool
+    provider: str
+    model: str | None
+
+
 class LlmProvider(Protocol):
+    async def status(self) -> LlmProviderStatus: ...
+
     async def explain(
         self, candidate: RouteCandidate, athlete: AthleteProfile
     ) -> RecommendationExplanation: ...

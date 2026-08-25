@@ -50,7 +50,7 @@ This starts Next.js and FastAPI together through the frontend's `concurrently` c
 
 ## Configuration
 
-Active variables are `DATABASE_URL`, `CORS_ORIGINS`, `FRONTEND_URL`, `NEXT_PUBLIC_API_BASE_URL`, `STRAVA_CLIENT_ID`, `STRAVA_CLIENT_SECRET`, `STRAVA_REDIRECT_URI`, `STRAVA_TOKEN_ENCRYPTION_KEY`, and `OPENROUTESERVICE_API_KEY`. `DATABASE_URL` is the sole database connection setting and is used by both the application and Alembic. `FRONTEND_URL` is the trusted planner URL the backend redirects to after successful Strava authorization. The backend and Alembic read the root `.env`; Next.js reads its process environment and optional `frontend/.env.local`. The default URLs work without extra frontend configuration. To override the API URL, put `NEXT_PUBLIC_API_BASE_URL=...` in `frontend/.env.local` or export it before `make dev`.
+Active variables are `DATABASE_URL`, `CORS_ORIGINS`, `FRONTEND_URL`, `NEXT_PUBLIC_API_BASE_URL`, `STRAVA_CLIENT_ID`, `STRAVA_CLIENT_SECRET`, `STRAVA_REDIRECT_URI`, `STRAVA_TOKEN_ENCRYPTION_KEY`, and `OPENROUTESERVICE_API_KEY`. Optional server-side Ollama variables are `OLLAMA_BASE_URL`, `OLLAMA_MODEL`, and `OLLAMA_REQUEST_TIMEOUT_SECONDS`. `DATABASE_URL` is the sole database connection setting and is used by both the application and Alembic. `FRONTEND_URL` is the trusted planner URL the backend redirects to after successful Strava authorization. The backend and Alembic read the root `.env`; Next.js reads its process environment and optional `frontend/.env.local`. The default URLs work without extra frontend configuration. To override the API URL, put `NEXT_PUBLIC_API_BASE_URL=...` in `frontend/.env.local` or export it before `make dev`.
 
 To configure Strava, create an API application in Strava's developer settings and register the callback domain for the host used by `STRAVA_REDIRECT_URI`. For local development, the example callback is `http://localhost:8000/api/v1/strava/callback`; the configured redirect URI must use that callback route and a host accepted by the Strava application. Copy the client ID and client secret into the local `.env`, then generate a Fernet key for `STRAVA_TOKEN_ENCRYPTION_KEY` from the backend directory:
 
@@ -126,7 +126,7 @@ converted to canonical meters and seconds before `POST /api/v1/planning/validate
 Empty overrides remain null for future profile-driven inference. Validation itself does
 not generate a route; a resolved distance can be submitted to the factual candidate endpoint.
 
-`.env.example` documents secret-free geocoding configuration and future Ollama settings. Ollama is not launched or downloaded by the application.
+`.env.example` documents optional Ollama configuration. Ollama must already be installed and running externally with the configured model; RouteMuse never launches Ollama or pulls models. Configuration is read only by FastAPI, so no `NEXT_PUBLIC_` Ollama variable is required. Startup, health checks, and deterministic recommendations work without Ollama, and Ollama output does not affect scoring or ranking.
 
 ## OpenStreetMap discovery
 
