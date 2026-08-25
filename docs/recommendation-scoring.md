@@ -151,7 +151,8 @@ exposes the scoring version, warnings, and weighted evidence coverage.
 ### Variety and named-feature matching
 
 Variety uses route proportions (or distance divided by route distance), combines
-duplicate normalized labels, excludes `unknown`-like labels, and calculates
+duplicate normalized labels, excludes `unknown`-like labels (including provider
+fallbacks such as `unknown_<code>` and unrated technical code zero), and calculates
 Shannon entropy normalized against four meaningful categories. Capping the
 normalizer at four keeps the scale reviewable, while proportion-aware entropy
 ensures a microscopic category adds only a microscopic amount. A single category

@@ -99,6 +99,24 @@ def test_tiny_category_and_unknown_do_not_artificially_maximize_variety() -> Non
     ) == (None, 0)
 
 
+@pytest.mark.parametrize("unknown_value", ["unknown_999", "unrated"])
+def test_provider_unknown_categories_are_not_variety_evidence(
+    unknown_value: str,
+) -> None:
+    mixed_score, mixed_coverage = distribution_variety(
+        [
+            SurfaceSummary(value="paved", proportion=0.5),
+            SurfaceSummary(value=unknown_value, proportion=0.5),
+        ],
+        1000,
+    )
+    assert mixed_score == 0
+    assert mixed_coverage == 0.5
+    assert distribution_variety(
+        [SurfaceSummary(value=unknown_value, proportion=1.0)], 1000
+    ) == (None, 0)
+
+
 def test_way_and_terrain_variety_are_proportion_aware() -> None:
     one_way = [WayTypeSummary(value="path", proportion=1.0)]
     two_ways = [

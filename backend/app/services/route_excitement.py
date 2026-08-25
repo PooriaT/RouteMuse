@@ -13,7 +13,8 @@ EXCITEMENT_SCORING_VERSION = "excitement-v1"
 MINIMUM_EVIDENCE_COVERAGE = 0.35
 MATERIAL_OVERLAP_MINIMUM = 0.02
 VARIETY_CATEGORY_CAP = 4
-UNKNOWN_VALUES = {"unknown", "unspecified", "unclassified", "other"}
+UNKNOWN_VALUES = {"unknown", "unrated", "unspecified", "unclassified", "other"}
+UNKNOWN_VALUE_PREFIXES = ("unknown_",)
 
 # Shape is deliberately small. Differences between activities are restrained and
 # encode only which kinds have a stronger factual basis for terrain/surface variety.
@@ -81,7 +82,9 @@ def _shares(
     shares: dict[str, float] = {}
     for entry in entries:
         value = entry.value.strip().lower()
-        if value in UNKNOWN_VALUES:
+        # ORS preserves unmapped provider codes as ``unknown_<code>`` and uses
+        # ``unrated`` for technical code zero. Neither is a factual category.
+        if value in UNKNOWN_VALUES or value.startswith(UNKNOWN_VALUE_PREFIXES):
             continue
         share = (
             entry.proportion
