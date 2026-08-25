@@ -28,6 +28,7 @@ vi.mock("@/lib/api/client", async (importOriginal) => {
       athleteProfile: vi.fn(),
       searchPlanningAreas: vi.fn(),
       validatePlanningRequest: vi.fn(),
+      recommendations: vi.fn(),
     },
   };
 });
@@ -106,6 +107,7 @@ beforeEach(() => {
   vi.mocked(api.syncStravaActivities).mockResolvedValue(completed);
   vi.mocked(api.athleteProfile).mockResolvedValue(emptyAthleteProfile);
   vi.mocked(api.validatePlanningRequest).mockImplementation(async (request) => request);
+  vi.mocked(api.recommendations).mockResolvedValue({ recommendations: [], requested_recommendations: 3, generated_candidates: 0, ranking_version: "recommendation-v1", warnings: [] });
 });
 
 afterEach(() => {
@@ -544,7 +546,7 @@ describe("PlannerForm", () => {
     renderPlanner();
     fireEvent.change(screen.getByLabelText("Target distance (km), optional"), { target: { value: "0" } });
     fireEvent.change(screen.getByLabelText("Target duration (minutes), optional"), { target: { value: "-2" } });
-    fireEvent.click(screen.getByRole("button", { name: "Prepare route request" }));
+    fireEvent.click(screen.getByRole("button", { name: "Generate recommendations" }));
 
     expect(screen.getByText("Choose a planning area.")).toHaveAttribute("role", "alert");
     expect(screen.getByText("Choose an activity type.")).toHaveAttribute("role", "alert");
@@ -555,7 +557,7 @@ describe("PlannerForm", () => {
 
   it("clears the missing-activity error as soon as a valid activity is selected", () => {
     renderPlanner();
-    fireEvent.click(screen.getByRole("button", { name: "Prepare route request" }));
+    fireEvent.click(screen.getByRole("button", { name: "Generate recommendations" }));
     const selector = screen.getByLabelText("Activity type");
     expect(screen.getByText("Choose an activity type.")).toHaveAttribute(
       "role",
@@ -572,7 +574,7 @@ describe("PlannerForm", () => {
     renderPlanner();
     const duration = screen.getByLabelText("Target duration (minutes), optional");
     fireEvent.change(duration, { target: { value: "2.51" } });
-    fireEvent.click(screen.getByRole("button", { name: "Prepare route request" }));
+    fireEvent.click(screen.getByRole("button", { name: "Generate recommendations" }));
 
     expect(
       screen.getByText("Duration must convert to a whole number of seconds."),
@@ -581,7 +583,7 @@ describe("PlannerForm", () => {
     expect(api.validatePlanningRequest).not.toHaveBeenCalled();
   });
 
-  it("validates a canonical request and confirms readiness without fabricating a route", async () => {
+  it("requests recommendations with the canonical planning request", async () => {
     vi.mocked(api.searchPlanningAreas).mockResolvedValue([planningArea]);
     renderPlanner();
     fireEvent.change(screen.getByLabelText("Location"), { target: { value: "Vancouver" } });
@@ -593,10 +595,11 @@ describe("PlannerForm", () => {
     fireEvent.change(screen.getByLabelText("Route shape, optional"), { target: { value: "out_and_back" } });
     fireEvent.change(screen.getByLabelText(/Novelty preference/), { target: { value: "novel" } });
 
-    fireEvent.click(screen.getByRole("button", { name: "Prepare route request" }));
+    fireEvent.click(screen.getByRole("button", { name: "Generate recommendations" }));
 
-    expect(await screen.findByText(/Planning inputs are ready/)).toHaveAttribute("role", "status");
-    expect(api.validatePlanningRequest).toHaveBeenCalledWith({
+    await waitFor(() => expect(api.recommendations).toHaveBeenCalled());
+    expect(api.recommendations).toHaveBeenCalledWith({
+      planning_request: {
       planning_area: planningArea,
       activity_kind: "hiking",
       target_distance_meters: 25_000,
@@ -604,20 +607,24 @@ describe("PlannerForm", () => {
       desired_challenge: "hard",
       route_shape: "out_and_back",
       novelty_preference: "novel",
+      },
+      start_date: "2025-08-19",
+      end_date: "2026-08-19",
+      timezone: expect.any(String),
     });
-    expect(screen.getByText(/No recommendations yet/)).toBeInTheDocument();
+    expect(screen.getByText(/Map is not configured/)).toBeInTheDocument();
   });
 
   it("presents backend planning validation failures accessibly", async () => {
     vi.mocked(api.searchPlanningAreas).mockResolvedValue([planningArea]);
-    vi.mocked(api.validatePlanningRequest).mockRejectedValue(new ApiError("raw", 422));
+    vi.mocked(api.recommendations).mockRejectedValue(new ApiError("raw", 422));
     renderPlanner();
     fireEvent.change(screen.getByLabelText("Location"), { target: { value: "Vancouver" } });
     fireEvent.click(await screen.findByRole("button", { name: planningArea.display_name }));
     fireEvent.change(screen.getByLabelText("Activity type"), { target: { value: "hiking" } });
-    fireEvent.click(screen.getByRole("button", { name: "Prepare route request" }));
+    fireEvent.click(screen.getByRole("button", { name: "Generate recommendations" }));
 
-    expect(await screen.findByText(/could not be validated/)).toHaveAttribute("role", "alert");
+    expect(await screen.findByText(/could not be generated/)).toHaveAttribute("role", "alert");
   });
 
   it("defaults road cycling from the athlete profile", async () => {

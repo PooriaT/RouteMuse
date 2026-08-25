@@ -20,6 +20,7 @@ flowchart TD
   DS --> F[Deterministic reasoning fallback]
   O --> U[Recommendation response]
   F --> U
+  U --> M[Browser-only MapLibre route map]
 ```
 
 ## RouteMuse domain
@@ -96,6 +97,19 @@ and strings have deterministic bounds plus a 32,000-character final ceiling. See
 [Recommendation reasoning](recommendation-reasoning.md).
 
 ## Application logic
+
+**Frontend recommendation map.** The planner sends the canonical planning request
+and selected historical calendar range directly to the recommendation endpoint and
+retains the returned server ranking in local component state. A browser-only
+MapLibre component turns every returned canonical LineString into one GeoJSON
+FeatureCollection, with separate selected, unselected, and interaction layers.
+Selection is keyed by candidate ID and defaults to server rank one; it never
+reranks. The viewport fits the complete candidate set once per result, including
+defensive longitude unwrapping at the antimeridian. `NEXT_PUBLIC_MAP_STYLE_URL`
+keeps the basemap replaceable. MapLibre's style attribution control stays enabled,
+and route-provider attribution is separately deduplicated and rendered as plain
+text. A missing or failed style degrades only the supplemental map, not the stored
+recommendation result.
 
 Round-trip candidate generation targets four distinct results in at most eight
 sequential calls. Versioned SHA-256 inputs yield durable seeds; a fixed target-factor

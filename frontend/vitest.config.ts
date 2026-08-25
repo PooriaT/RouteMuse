@@ -13,6 +13,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "."),
+      "maplibre-gl": path.resolve(__dirname, "tests/maplibreMock.ts"),
     },
   },
 });
