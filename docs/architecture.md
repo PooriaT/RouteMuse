@@ -83,7 +83,9 @@ Recommendation explanations use RouteMuse's strict, versioned reasoning schema.
 Ollama receives the Pydantic-generated JSON Schema and its assistant content is
 validated against that same model before it crosses the adapter boundary. Invalid
 JSON or schema violations become a controlled malformed-response error; generated
-content is not included in that error. See
+content is not included in that error. The input carries the ranked scorecard and
+warnings, while geometry is excluded; accepted prose and tags must also be exact
+members of trusted, field-specific evidence allowlists. See
 [Recommendation reasoning](recommendation-reasoning.md).
 
 ## Application logic

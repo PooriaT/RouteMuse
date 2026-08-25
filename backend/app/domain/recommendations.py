@@ -220,6 +220,19 @@ class RankedRecommendation(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+class RecommendationReasoningEvidence(BaseModel):
+    """Trusted ranking evidence and the exact prose the model may select."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    recommendation: RankedRecommendation
+    summaries: list[ReasoningSummary] = Field(min_length=1, max_length=8)
+    reasons: list[ReasoningItem] = Field(max_length=16)
+    cautions: list[ReasoningItem] = Field(max_length=16)
+    highlights: list[ReasoningItem] = Field(max_length=16)
+    qualitative_tags: list[RecommendationQualitativeTag] = Field(max_length=8)
+
+
 class RecommendationResult(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 

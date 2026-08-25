@@ -26,13 +26,20 @@ popular, safe, and hidden-gem labels.
 The Ollama chat request is non-streaming, uses temperature zero, and passes
 `RecommendationReasoning.model_json_schema()` in Ollama's `format` field. The
 prompt prohibits reranking, hidden scores, changed numbers, coordinates, geometry,
-and unsupported facts. Unknown information must remain unknown.
+and unsupported facts. Its input contains the `RankedRecommendation`, including
+rank, final score, scorecard evidence, and aggregated warnings, but explicitly
+omits candidate geometry and provider provenance. Trusted application code also
+supplies bounded allowlists of statements and tags; final construction of those
+allowlists belongs to the recommendation-enrichment wiring.
 
 Assistant content is validated directly with Pydantic's JSON validation. RouteMuse
 does not repair output, strip unknown properties, or accept Markdown wrappers.
 Non-JSON, missing or extra fields, wrong types, invalid tags, blank strings, and
 bound violations become `LlmMalformedResponseError`. The controlled error does not
-expose generated content.
+expose generated content. After shape validation, every returned string and tag
+must exactly match its field's supplied allowlist. This second validation rejects
+schema-valid inventions—including unsupported safety, scenery, coordinate, or
+score claims—rather than relying on prompt wording to establish trust.
 
 The schema has no scores, rank, coordinates, waypoints, or geometry. Reasoning
 therefore cannot alter deterministic scorecards or ordering and is not stored as a

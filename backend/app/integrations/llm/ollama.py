@@ -6,9 +6,10 @@ import httpx
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from app.core.config import Settings
-from app.domain.athlete_profile import AthleteProfile
-from app.domain.recommendations import RecommendationReasoning
-from app.domain.routes import RouteCandidate
+from app.domain.recommendations import (
+    RecommendationReasoning,
+    RecommendationReasoningEvidence,
+)
 from app.integrations.contracts import LlmProviderStatus
 from app.integrations.llm.errors import (
     LlmConfigurationError,
@@ -67,7 +68,7 @@ class OllamaLlmProvider:
         )
 
     async def explain(
-        self, candidate: RouteCandidate, athlete: AthleteProfile
+        self, evidence: RecommendationReasoningEvidence
     ) -> RecommendationReasoning:
         if not self._base_url or not self._model:
             raise LlmConfigurationError("Ollama is not configured")
@@ -81,11 +82,19 @@ class OllamaLlmProvider:
                         "why this route appears at its already-determined rank; do "
                         "not rerank it or introduce a hidden score. Do not change "
                         "supplied numbers or generate coordinates or geometry. Use "
-                        "only supplied facts, including cautions and highlights; do "
+                        "only the supplied, pre-approved statements verbatim; do "
                         "not invent conditions, safety claims, or other unsupported "
                         "facts. Treat unknowns as unknown.\n"
-                        f"candidate={candidate.model_dump_json()}\n"
-                        f"athlete={athlete.model_dump_json()}"
+                        "evidence="
+                        f"{evidence.model_dump_json(exclude={
+                            'recommendation': {
+                                'candidate': {
+                                    'geometry',
+                                    'geojson_reference',
+                                    'provenance',
+                                }
+                            }
+                        })}"
                     ),
                 }
             ],
@@ -96,7 +105,11 @@ class OllamaLlmProvider:
         response = await self._request("POST", "/api/chat", json=body)
         try:
             chat = _ChatResponse.model_validate(response.json())
-            return RecommendationReasoning.model_validate_json(chat.message.content)
+            reasoning = RecommendationReasoning.model_validate_json(
+                chat.message.content
+            )
+            _validate_grounded_reasoning(reasoning, evidence)
+            return reasoning
         except (ValueError, ValidationError) as exc:
             raise LlmMalformedResponseError(
                 "Ollama returned an invalid chat response"
@@ -150,3 +163,17 @@ def _canonical_model_name(model: str) -> str:
     if ":" not in basename and "@" not in basename:
         return f"{model}:latest"
     return model
+
+
+def _validate_grounded_reasoning(
+    reasoning: RecommendationReasoning, evidence: RecommendationReasoningEvidence
+) -> None:
+    """Reject valid-looking prose that was not supplied by trusted application code."""
+    fields = ("reasons", "cautions", "highlights", "qualitative_tags")
+    if reasoning.summary not in evidence.summaries or any(
+        not set(getattr(reasoning, field)).issubset(getattr(evidence, field))
+        for field in fields
+    ):
+        raise LlmMalformedResponseError(
+            "Ollama returned reasoning unsupported by supplied evidence"
+        )
