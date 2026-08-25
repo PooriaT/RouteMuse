@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 
 import { ApiError, api } from "@/lib/api/client";
+import { RouteMap } from "@/features/recommendations/RouteMap";
 import type { ActivityType } from "@/types/activity";
 import type {
   ActivityKind,
@@ -18,6 +19,7 @@ import {
   type PlanningPreferences,
   type RouteShape,
 } from "@/types/planning";
+import type { RecommendationResult } from "@/types/recommendations";
 
 import {
   AthleteProfileSummary,
@@ -68,8 +70,11 @@ export function PlannerForm({
     noveltyPreference: null,
   });
   const [planningErrors, setPlanningErrors] = useState<ReturnType<typeof validatePlanningPreferences>>({});
-  const [planningStatus, setPlanningStatus] = useState<"idle" | "validating" | "ready" | "error">("idle");
+  const [planningStatus, setPlanningStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [recommendationResult, setRecommendationResult] = useState<RecommendationResult | null>(null);
+  const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null);
   const profileRequestSequence = useRef(0);
+  const recommendationRequestSequence = useRef(0);
   const selectedProfileRequest = useRef<AthleteProfileRequest | null>(null);
   const hasInvalidRange = Boolean(
     dates.startDate && dates.endDate && dates.startDate > dates.endDate,
@@ -205,8 +210,16 @@ export function PlannerForm({
     });
   }, [activityTypes, profile, profileStatus]);
 
-  const handleActivityChange = (value: string) => {
+  const clearRecommendations = () => {
+    recommendationRequestSequence.current += 1;
+    setRecommendationResult(null);
+    setSelectedCandidateId(null);
+    setRecommendationError(null);
     setPlanningStatus("idle");
+  };
+
+  const handleActivityChange = (value: string) => {
+    clearRecommendations();
     if (value === "") {
       setActivitySelection({ kind: null, source: "user" });
       return;
@@ -234,23 +247,42 @@ export function PlannerForm({
   ) => {
     setEffortPreferences((current) => ({ ...current, [key]: value }));
     setPlanningErrors((current) => ({ ...current, [key]: undefined }));
-    setPlanningStatus("idle");
+    clearRecommendations();
   };
 
-  const preparePlanningRequest = async () => {
+  const generateRecommendations = async () => {
     const errors = validatePlanningPreferences(planningPreferences);
     setPlanningErrors(errors);
     setPlanningStatus("idle");
     const request = toRoutePlanningRequest(planningPreferences);
     if (!request) return;
-    setPlanningStatus("validating");
-    try {
-      await api.validatePlanningRequest(request);
-      setPlanningStatus("ready");
-    } catch {
+    if (!timezone || !hasValidPeriod) {
       setPlanningStatus("error");
+      return;
+    }
+    const sequence = ++recommendationRequestSequence.current;
+    setRecommendationError(null);
+    setPlanningStatus("loading");
+    try {
+      const result = await api.recommendations({
+        planning_request: request,
+        start_date: dates.startDate,
+        end_date: dates.endDate,
+        timezone,
+      });
+      if (sequence !== recommendationRequestSequence.current) return;
+      setRecommendationResult(result);
+      setSelectedCandidateId(result.recommendations.find(({ rank }) => rank === 1)?.candidate.id ?? null);
+      setPlanningStatus("ready");
+    } catch (error) {
+      if (sequence !== recommendationRequestSequence.current) return;
+      setRecommendationResult(null);
+      setSelectedCandidateId(null);
+      setPlanningStatus("error");
+      setRecommendationError(recommendationErrorMessage(error));
     }
   };
+  const [recommendationError, setRecommendationError] = useState<string | null>(null);
 
   return (
     <main className="mx-auto max-w-5xl p-6 md:p-10">
@@ -280,7 +312,7 @@ export function PlannerForm({
               aria-invalid={hasInvalidRange}
               type="date"
               value={dates.startDate}
-              onChange={(event) => setDates((current) => ({ ...current, startDate: event.target.value }))}
+              onChange={(event) => { setDates((current) => ({ ...current, startDate: event.target.value })); clearRecommendations(); }}
             />
           </label>
           <label>
@@ -290,7 +322,7 @@ export function PlannerForm({
               aria-invalid={hasInvalidRange}
               type="date"
               value={dates.endDate}
-              onChange={(event) => setDates((current) => ({ ...current, endDate: event.target.value }))}
+              onChange={(event) => { setDates((current) => ({ ...current, endDate: event.target.value })); clearRecommendations(); }}
             />
           </label>
         </div>
@@ -325,7 +357,7 @@ export function PlannerForm({
           <LocationSearch validationError={planningErrors.planningArea} selected={planningArea} onSelect={(area) => {
             setPlanningArea(area);
             setPlanningErrors((current) => ({ ...current, planningArea: undefined }));
-            setPlanningStatus("idle");
+            clearRecommendations();
           }} />
           <div>
             <label htmlFor="activity-type">Activity type</label>
@@ -365,17 +397,43 @@ export function PlannerForm({
         {activityTypesUnavailable && (
           <p role="status" className="mt-2 text-sm text-amber-700">Activity types are temporarily unavailable. Try again when the RouteMuse API is running.</p>
         )}
-        <button type="button" disabled={planningStatus === "validating"} aria-busy={planningStatus === "validating"} onClick={() => void preparePlanningRequest()} className="mt-4 rounded bg-emerald-700 px-4 py-3 font-semibold text-white disabled:opacity-60">{planningStatus === "validating" ? "Checking inputs…" : "Prepare route request"}</button>
-        {planningStatus === "ready" && <p role="status" className="mt-3 text-sm font-medium text-emerald-700">Planning inputs are ready. No route has been generated.</p>}
-        {planningStatus === "error" && <p role="alert" className="mt-3 text-sm font-medium text-red-700">The planning inputs could not be validated by RouteMuse. Review them or try again.</p>}
+        <button type="button" disabled={planningStatus === "loading"} aria-busy={planningStatus === "loading"} onClick={() => void generateRecommendations()} className="mt-4 rounded bg-emerald-700 px-4 py-3 font-semibold text-white disabled:opacity-60">{planningStatus === "loading" ? "Generating recommendations…" : "Generate recommendations"}</button>
+        {planningStatus === "loading" && <p role="status" className="mt-3 text-sm text-slate-600">Generating provider-backed route recommendations…</p>}
+        {planningStatus === "error" && <p role="alert" className="mt-3 text-sm font-medium text-red-700">{recommendationError ?? "Recommendations could not be generated. Review the inputs and try again."}</p>}
       </section>
 
-      <section aria-labelledby="recommendations-heading" className="rounded-xl border-2 border-dashed border-emerald-200 p-8 text-center">
+      <section aria-labelledby="recommendations-heading" aria-busy={planningStatus === "loading"} className="rounded-xl border-2 border-dashed border-emerald-200 p-8">
         <h2 id="recommendations-heading" className="text-xl font-bold">Recommendations</h2>
-        <p className="mt-2 text-slate-600">No recommendations yet. Provider-backed, personalized route candidates will appear here in a future release.</p>
+        {!recommendationResult && <p className="mt-2 text-slate-600">No recommendations yet. Generate routes from your planning preferences.</p>}
+        {recommendationResult && <div className="mt-4">
+          <RouteMap recommendations={recommendationResult.recommendations} selectedCandidateId={selectedCandidateId} onSelectCandidate={setSelectedCandidateId} />
+          <ProviderAttribution result={recommendationResult} selectedCandidateId={selectedCandidateId} />
+        </div>}
       </section>
     </main>
   );
+}
+
+function ProviderAttribution({ result, selectedCandidateId }: { result: RecommendationResult; selectedCandidateId: string | null }) {
+  const selected = result.recommendations.find(({ candidate }) => candidate.id === selectedCandidateId);
+  const attributions = [...new Set(selected?.candidate.provenance.map(({ attribution }) => attribution) ?? [])];
+  if (!attributions.length) return null;
+  return <p className="mt-3 text-sm text-slate-600">Route data: {attributions.join(" · ")}</p>;
+}
+
+function recommendationErrorMessage(error: unknown) {
+  if (!(error instanceof ApiError)) return "Recommendations could not be generated. Try again.";
+  const messages: Record<string, string> = {
+    network_error: "The RouteMuse API is unavailable. Check your connection and try again.",
+    strava_connection_required: "Connect Strava before generating personalized recommendations.",
+    athlete_profile_history_incomplete: "Finish importing the selected activity period before generating recommendations.",
+    recommendation_target_unavailable: "Add a target distance or import enough matching activity history.",
+    personalized_recommendations_unavailable: "Personalized recommendations are temporarily unavailable.",
+    unsupported_activity: "The selected activity is not supported by the current route provider.",
+    route_provider_rate_limited: "The route provider is busy. Wait a moment and try again.",
+    route_provider_unavailable: "The route provider is temporarily unavailable. Try again later.",
+  };
+  return (error.code && messages[error.code]) || "Recommendations could not be generated. Review the inputs and try again.";
 }
 
 function profileErrorMessage(error: unknown) {

@@ -119,6 +119,31 @@ describe("RouteMuse API client", () => {
     );
   });
 
+  it("posts the planning request, dates, and timezone for recommendations", async () => {
+    const body = {
+      planning_request: {
+        planning_area: { latitude: 49.28, longitude: -123.12, display_name: "Vancouver", bounding_box: null, source_provider: "openrouteservice", source_attribution: "© OpenStreetMap contributors" },
+        activity_kind: "hiking" as const,
+        target_distance_meters: 12_000,
+        target_duration_seconds: null,
+        desired_challenge: null,
+        route_shape: "loop" as const,
+        novelty_preference: null,
+      },
+      start_date: "2025-08-25",
+      end_date: "2026-08-25",
+      timezone: "America/Vancouver",
+    };
+    fetchMock.mockResolvedValue(jsonResponse({ recommendations: [], requested_recommendations: 3, generated_candidates: 0, ranking_version: "recommendation-v1", warnings: [] }));
+
+    await api.recommendations(body);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:8000/api/v1/recommendations",
+      expect.objectContaining({ method: "POST", body: JSON.stringify(body) }),
+    );
+  });
+
   it("preserves safe status, retry, and partial-result error metadata", async () => {
     const partial = {
       status: "partial",

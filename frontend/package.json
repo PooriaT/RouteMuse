@@ -11,6 +11,7 @@
     "dev:backend": "cd ../backend && poetry run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000"
   },
   "dependencies": {
+    "maplibre-gl": "5.24.0",
     "next": "15.4.6",
     "react": "19.1.1",
     "react-dom": "19.1.1"

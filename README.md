@@ -177,6 +177,15 @@ ranking, persistence, or frontend map participates in this operation.
 
 ## Commands
 
+The planner now posts its typed preferences and historical period to
+`/api/v1/recommendations` and renders the server-ranked, provider-grounded GeoJSON
+with MapLibre GL JS in the browser. Configure a replaceable basemap style with
+`NEXT_PUBLIC_MAP_STYLE_URL`; when it is absent or unavailable, recommendation
+generation and results remain usable while the map shows a controlled fallback.
+MapLibre keeps style/source attribution visible, while the selected route's
+deduplicated provider attribution is rendered separately below the map. RouteMuse
+does not reroute, recalculate geometry, or rank candidates in the browser.
+
 | Command | Purpose |
 |---|---|
 | `make dev` | Start the frontend and backend development servers through the frontend configuration |
@@ -195,7 +204,7 @@ poetry run uvicorn app.main:app --reload
 
 ## Current limitations and next integrations
 
-RouteMuse still has no user-account system, frontend recommendation map, GPX export, or route saving. Structured backend reasoning is available, but its frontend presentation remains future work. The factual route-candidate endpoint remains deliberately unranked, while the separate recommendation endpoint applies deterministic personalized scoring to copied candidate data. Strava OAuth credentials are connected and encrypted server-side; historical activities can be synchronized idempotently, and exact `sport_type` values are normalized at the integration boundary while unsupported values remain identifiable.
+RouteMuse still has no user-account system, full recommendation cards/comparison, GPX export, or route saving. Structured backend reasoning is available, but its full frontend presentation remains future work. The factual route-candidate endpoint remains deliberately unranked, while the separate recommendation endpoint applies deterministic personalized scoring to copied candidate data. Strava OAuth credentials are connected and encrypted server-side; historical activities can be synchronized idempotently, and exact `sport_type` values are normalized at the integration boundary while unsupported values remain identifiable.
 
 
 ### Personalized recommendations

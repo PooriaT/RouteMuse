@@ -13,6 +13,7 @@ import type {
   PlanningValidationResponse,
   RoutePlanningRequest,
 } from "@/types/planning";
+import type { RecommendationRequest, RecommendationResult } from "@/types/recommendations";
 
 const API_BASE_URL = (
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000"
@@ -128,6 +129,11 @@ export const api = {
   validatePlanningRequest: (body: RoutePlanningRequest) =>
     request<PlanningValidationResponse, RoutePlanningRequest>(
       "/api/v1/planning/validate",
+      { method: "POST", body },
+    ),
+  recommendations: (body: RecommendationRequest) =>
+    request<RecommendationResult, RecommendationRequest>(
+      "/api/v1/recommendations",
       { method: "POST", body },
     ),
 };
