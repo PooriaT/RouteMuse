@@ -1,47 +1,73 @@
 # Recommendation reasoning
 
-RouteMuse owns recommendation reasoning schema **`reasoning-v1`**. It is textual
-enrichment of an already scored and ranked recommendation, not a source of route
-facts and not an input to scoring or ranking.
+RouteMuse owns the bounded output schema **`reasoning-v1`** and the separate,
+provider-neutral input schema **`reasoning-context-v1`**. Reasoning is textual
+enrichment of an already scored and ranked recommendation, never a source of facts
+or an input to scoring.
 
-## Schema
+## Output schema
 
-All five fields are required and unknown fields are forbidden:
+All fields are required and unknown fields are forbidden. `summary` is a non-blank
+string of at most 600 characters. `reasons`, `cautions`, and `highlights` each hold
+at most eight non-blank 300-character strings. `qualitative_tags` holds at most
+eight values from `close_to_target`, `strong_athlete_fit`, `high_climbing`,
+`mixed_surface`, `technical_terrain`, `novel`, `familiar`, and
+`limited_evidence`. The output has no numeric or geometry fields.
 
-| Field | Type and bound | Meaning |
-| --- | --- | --- |
-| `summary` | non-blank string, at most 600 characters | Concise grounded overview. |
-| `reasons` | list of at most 8 non-blank strings, each at most 300 characters | Why the existing rank is appropriate, using supplied fit, target, difficulty, novelty, excitement, or confidence evidence. |
-| `cautions` | list of at most 8 non-blank strings, each at most 300 characters | Supplied warnings, missing evidence, and uncertainty or coverage limits. |
-| `highlights` | list of at most 8 non-blank strings, each at most 300 characters | Concise characteristics backed by supplied route evidence. |
-| `qualitative_tags` | list of at most 8 enum values | Evidence-derived labels from the vocabulary below. |
+## Input schema and unknowns
 
-The v1 qualitative vocabulary is `close_to_target`, `strong_athlete_fit`,
-`high_climbing`, `mixed_surface`, `technical_terrain`, `novel`, `familiar`, and
-`limited_evidence`. It intentionally excludes unsupported claims such as scenic,
-popular, safe, and hidden-gem labels.
+`RecommendationReasoningContext` has typed `recommendation`,
+`planning_preferences`, `athlete`, `route_facts`, `scorecard`, and
+`evidence_limitations` sections.
 
-## Provider and validation boundary
+* Recommendation contains authoritative `rank`, `final_score`, and
+  `ranking_version` only.
+* Planning preferences contain activity, normalized distance/duration targets,
+  challenge, shape, novelty preference, and planning-area display name.
+* Athlete contains only the requested activity kind: matching sample count;
+  `p25`, `median`, `p75`, and `p90` distance, moving-time, elevation, and climbing
+  density distributions; and aggregate consistency/recency signals when present.
+* Route facts contain name, activity, distance, duration, elevation gain/loss,
+  shape, data confidence, normalized breakdowns, and useful clipped provenance.
+* Scorecard contains the existing difficulty, athlete-fit, novelty, excitement,
+  preference-alignment, confidence, and final values plus component evidence.
+  Novelty retains status, nullable score, confidence, and geometry coverage ratio.
+* Evidence limitations contain existing deterministic/provider warnings and
+  explicit truncation flags.
 
-The Ollama chat request is non-streaming, uses temperature zero, and passes
-`RecommendationReasoning.model_json_schema()` in Ollama's `format` field. The
-prompt prohibits reranking, hidden scores, changed numbers, coordinates, geometry,
-and unsupported facts. Its input contains the `RankedRecommendation`, including
-rank, final score, scorecard evidence, and aggregated warnings, but explicitly
-omits candidate geometry and provider provenance. Trusted application code also
-supplies bounded allowlists of statements and tags; final construction of those
-allowlists belongs to the recommendation-enrichment wiring.
+The pure builder never recalculates a score. Missing information remains JSON
+`null`, accompanied where applicable by status/availability. Missing elevation is
+not zero, unavailable novelty is not one, and omitted confidence remains unknown.
 
-Assistant content is validated directly with Pydantic's JSON validation. RouteMuse
-does not repair output, strip unknown properties, or accept Markdown wrappers.
-Non-JSON, missing or extra fields, wrong types, invalid tags, blank strings, and
-bound violations become `LlmMalformedResponseError`. The controlled error does not
-expose generated content. After shape validation, every returned string and tag
-must exactly match its field's supplied allowlist. This second validation rejects
-schema-valid inventions—including unsupported safety, scenery, coordinate, or
-score claims—rather than relying on prompt wording to establish trust.
+## Bounds
 
-The schema has no scores, rank, coordinates, waypoints, or geometry. Reasoning
-therefore cannot alter deterministic scorecards or ordering and is not stored as a
-factual property of `RouteCandidate`. A future schema semantic change requires a
-new explicit version.
+V1 allows at most 8 surfaces, 8 way types, 12 technical entries, 8 provenance
+entries, 24 score components, and 16 warnings. Breakdown distances and proportions
+are first normalized to comparable route shares, then sorted by decreasing share
+and stable labels before truncation; provenance and warnings also sort stably.
+Externally influenced strings are clipped at 300 characters with
+`…[truncated]`, and flags expose clipping/truncation. A final 32,000-character
+serialized JSON ceiling raises `ReasoningContextConstructionError` rather than
+sending oversized input. No tokenizer is involved.
+
+## Provider and prompt-injection boundary
+
+Ollama receives the context JSON in a user message and the Pydantic-generated
+output JSON Schema. A separate system message says rank is authoritative and
+immutable; prohibits reranking, score calculation, changed numbers, geometry, and
+invented facts; preserves unknowns; grounds cautions in supplied limitations; and
+forbids unsupported safety, access, weather, popularity, and scenery claims.
+Route/area/provider names and warnings are untrusted structured data and are never
+concatenated into the privileged system message.
+
+Ollama never receives candidate geometry, GeoJSON references, coordinates,
+waypoints, planning-area coordinates/bounds, individual activities, activity IDs,
+raw timestamps, OAuth data, HTTP headers, provider request/source IDs, API URLs,
+credentials, raw ORS/Overpass payloads, generation provenance, or blindly dumped
+planning/profile/candidate objects. Assistant content is strictly validated as
+JSON against `RecommendationReasoning`; malformed results become a controlled
+error without exposing generated content. Schema-valid output is then checked
+against deterministic grounding: every returned statement must exactly match a
+projected component evidence summary or warning, and every qualitative tag must be
+supported by the corresponding score, availability, or route fact. Unsupported
+safety prose and tags such as `high_climbing` with unknown elevation are rejected.

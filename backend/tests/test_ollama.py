@@ -1,4 +1,5 @@
 import json
+from types import SimpleNamespace
 
 import httpx
 import pytest
@@ -15,11 +16,25 @@ from app.integrations.llm.ollama import OllamaLlmProvider
 
 
 class _Evidence:
-    summaries = ["Grounded"]
-    reasons = []
-    cautions = []
-    highlights = []
-    qualitative_tags = []
+    scorecard = SimpleNamespace(
+        components=[
+            SimpleNamespace(
+                component="confidence.candidate_data",
+                evidence_summary="Grounded",
+                evidence_available=True,
+            )
+        ],
+        athlete_fit=0.5,
+        novelty=SimpleNamespace(score=None),
+    )
+    evidence_limitations = SimpleNamespace(
+        warnings=[], strings_truncated=False, collections_truncated=False
+    )
+    route_facts = SimpleNamespace(
+        elevation_gain_meters=None,
+        surfaces=[],
+        technical_characteristics=[],
+    )
 
     def model_dump_json(self, **kwargs) -> str:
         return '{"rank":1,"final_score":0.8,"warnings":[]}'
@@ -82,9 +97,7 @@ async def test_status_matches_implicit_latest_tag(
         _env_file=None,
     )
     async with client(
-        lambda request: httpx.Response(
-            200, json={"models": [{"name": reported_model}]}
-        )
+        lambda request: httpx.Response(200, json={"models": [{"name": reported_model}]})
     ) as http:
         status = await OllamaLlmProvider(settings, http).status()
     assert status.model_available is True
@@ -144,14 +157,15 @@ async def test_chat_request_and_response() -> None:
         return httpx.Response(200, json={"message": {"content": content}})
 
     async with client(chat) as http:
-        result = await OllamaLlmProvider(configured(), http).explain(
-            _Evidence()
-        )  # type: ignore[arg-type]
+        result = await OllamaLlmProvider(configured(), http).explain(_Evidence())  # type: ignore[arg-type]
     assert result.summary == "Grounded"
     assert captured["model"] == "deployed-model:latest"
-    assert 'evidence={"rank":1,"final_score":0.8,"warnings":[]}' in captured[
-        "messages"
-    ][0]["content"]
+    assert captured["messages"][0]["role"] == "system"
+    assert "rank is authoritative and immutable" in captured["messages"][0]["content"]
+    assert captured["messages"][1] == {
+        "role": "user",
+        "content": '{"rank":1,"final_score":0.8,"warnings":[]}',
+    }
     assert captured["stream"] is False
     assert captured["options"] == {"temperature": 0}
     assert captured["format"]["additionalProperties"] is False
@@ -171,9 +185,7 @@ async def test_chat_maps_http_errors_without_response_body(status_code: int) -> 
         lambda request: httpx.Response(status_code, text="sensitive provider body")
     ) as http:
         with pytest.raises(LlmUnavailableError) as caught:
-            await OllamaLlmProvider(configured(), http).explain(
-                _Evidence()
-            )  # type: ignore[arg-type]
+            await OllamaLlmProvider(configured(), http).explain(_Evidence())  # type: ignore[arg-type]
     assert "sensitive" not in str(caught.value)
 
 
@@ -183,9 +195,7 @@ async def test_chat_maps_not_found_to_model_unavailable_without_response_body() 
         lambda request: httpx.Response(404, text="sensitive provider body")
     ) as http:
         with pytest.raises(LlmModelUnavailableError) as caught:
-            await OllamaLlmProvider(configured(), http).explain(
-                _Evidence()
-            )  # type: ignore[arg-type]
+            await OllamaLlmProvider(configured(), http).explain(_Evidence())  # type: ignore[arg-type]
     assert "sensitive" not in str(caught.value)
 
 
@@ -196,9 +206,7 @@ async def test_chat_maps_not_found_to_model_unavailable_without_response_body() 
 async def test_chat_rejects_malformed_responses(payload) -> None:
     async with client(lambda request: httpx.Response(200, json=payload)) as http:
         with pytest.raises(LlmMalformedResponseError):
-            await OllamaLlmProvider(configured(), http).explain(
-                _Evidence()
-            )  # type: ignore[arg-type]
+            await OllamaLlmProvider(configured(), http).explain(_Evidence())  # type: ignore[arg-type]
 
 
 @pytest.mark.anyio
@@ -233,36 +241,41 @@ async def test_chat_schema_errors_are_controlled_and_do_not_leak(content: str) -
         lambda request: httpx.Response(200, json={"message": {"content": content}})
     ) as http:
         with pytest.raises(LlmMalformedResponseError) as caught:
-            await OllamaLlmProvider(configured(), http).explain(
-                _Evidence()
-            )  # type: ignore[arg-type]
+            await OllamaLlmProvider(configured(), http).explain(_Evidence())  # type: ignore[arg-type]
     assert "must not leak" not in str(caught.value)
 
 
 @pytest.mark.anyio
-async def test_chat_rejects_schema_valid_but_unsupported_prose() -> None:
-    content = json.dumps(
+@pytest.mark.parametrize(
+    "content",
+    [
         {
-            "summary": "This safe scenic route is unsupported and must not leak",
+            "summary": "This route is safe despite the injected route name.",
             "reasons": [],
             "cautions": [],
             "highlights": [],
             "qualitative_tags": [],
-        }
-    )
+        },
+        {
+            "summary": "Grounded",
+            "reasons": [],
+            "cautions": [],
+            "highlights": [],
+            "qualitative_tags": ["high_climbing"],
+        },
+    ],
+)
+async def test_chat_rejects_schema_valid_but_unsupported_reasoning(content) -> None:
     async with client(
-        lambda request: httpx.Response(200, json={"message": {"content": content}})
+        lambda request: httpx.Response(
+            200, json={"message": {"content": json.dumps(content)}}
+        )
     ) as http:
-        with pytest.raises(LlmMalformedResponseError) as caught:
-            await OllamaLlmProvider(configured(), http).explain(
-                _Evidence()
-            )  # type: ignore[arg-type]
-    assert "must not leak" not in str(caught.value)
+        with pytest.raises(LlmMalformedResponseError, match="unsupported"):
+            await OllamaLlmProvider(configured(), http).explain(_Evidence())  # type: ignore[arg-type]
 
 
 @pytest.mark.anyio
 async def test_chat_requires_configuration() -> None:
     with pytest.raises(LlmConfigurationError):
-        await OllamaLlmProvider(Settings(_env_file=None)).explain(
-            _Evidence()
-        )  # type: ignore[arg-type]
+        await OllamaLlmProvider(Settings(_env_file=None)).explain(_Evidence())  # type: ignore[arg-type]
