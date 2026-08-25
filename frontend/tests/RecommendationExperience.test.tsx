@@ -77,7 +77,7 @@ describe("RecommendationExperience", () => {
       recommendation("three", "Three", 3), recommendation("four", "Four", 4),
     ] };
     render(<RecommendationExperience result={fourRoutes} selectedCandidateId="one" onSelectCandidate={vi.fn()} />);
-    const compare = screen.getAllByRole("button", { name: "Compare" });
+    const compare = screen.getAllByRole("button", { name: /^Compare / });
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
     expect(screen.getByText("Select at least two routes to compare.")).toBeInTheDocument();
     fireEvent.click(compare[0]);
@@ -89,13 +89,13 @@ describe("RecommendationExperience", () => {
     fireEvent.click(compare[3]);
     expect(screen.getByText("You can compare up to 3 routes at once.")).toBeInTheDocument();
     expect(screen.getAllByRole("columnheader")).toHaveLength(4);
-    fireEvent.click(screen.getAllByRole("button", { name: "Remove from comparison" })[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Remove One from comparison" }));
     expect(screen.getAllByRole("columnheader")).toHaveLength(3);
   });
 
   it("renders semantic headers, effort, scores, characteristics, warnings, provider data, and explicit missing evidence", () => {
     render(<RecommendationExperience result={result} selectedCandidateId="route-two" onSelectCandidate={vi.fn()} />);
-    const compare = screen.getAllByRole("button", { name: "Compare" });
+    const compare = screen.getAllByRole("button", { name: /^Compare / });
     fireEvent.click(compare[0]); fireEvent.click(compare[1]);
     expect(screen.getAllByRole("columnheader")).toHaveLength(3);
     for (const label of ["Distance", "Estimated duration", "Elevation gain", "Climbing density", "Route shape", "Key surfaces", "Way types", "Technical characteristics", "Final recommendation score", "Route difficulty", "Athlete fit", "Geographic novelty", "Excitement", "Confidence", "Preference alignment", "Warnings", "Provider metadata", "Why suggested"]) {
@@ -121,20 +121,20 @@ describe("RecommendationExperience", () => {
   it("focuses a compared route on the map without changing comparison membership", () => {
     const onSelect = vi.fn();
     render(<RecommendationExperience result={result} selectedCandidateId="route-two" onSelectCandidate={onSelect} />);
-    const compare = screen.getAllByRole("button", { name: "Compare" });
+    const compare = screen.getAllByRole("button", { name: /^Compare / });
     fireEvent.click(compare[0]); fireEvent.click(compare[1]);
     fireEvent.click(screen.getAllByRole("button", { name: "View on map" })[1]);
     expect(onSelect).toHaveBeenCalledWith("route-one");
-    expect(screen.getAllByRole("button", { name: "Remove from comparison" })).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: /^Remove .+ from comparison$/ })).toHaveLength(2);
   });
 
   it("clears comparison membership when a new result arrives", () => {
     const { rerender } = render(<RecommendationExperience result={result} selectedCandidateId="route-two" onSelectCandidate={vi.fn()} />);
-    const compare = screen.getAllByRole("button", { name: "Compare" });
+    const compare = screen.getAllByRole("button", { name: /^Compare / });
     fireEvent.click(compare[0]); fireEvent.click(compare[1]);
     expect(screen.getByRole("table")).toBeInTheDocument();
     rerender(<RecommendationExperience result={{ ...result }} selectedCandidateId="route-two" onSelectCandidate={vi.fn()} />);
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: "Compare" })).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: /^Compare / })).toHaveLength(2);
   });
 });
