@@ -4,9 +4,9 @@ from typing import Protocol
 
 from app.domain.activities import Activity
 from app.domain.planning_areas import PlanningArea
+from app.domain.reasoning_context import RecommendationReasoningContext
 from app.domain.recommendations import (
     RecommendationReasoning,
-    RecommendationReasoningEvidence,
 )
 from app.domain.routes import (
     RouteCandidate,
@@ -45,5 +45,5 @@ class LlmProvider(Protocol):
     async def status(self) -> LlmProviderStatus: ...
 
     async def explain(
-        self, evidence: RecommendationReasoningEvidence
+        self, context: RecommendationReasoningContext
     ) -> RecommendationReasoning: ...
