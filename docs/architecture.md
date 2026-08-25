@@ -111,6 +111,18 @@ and route-provider attribution is separately deduplicated and rendered as plain
 text. A missing or failed style degrades only the supplemental map, not the stored
 recommendation result.
 
+**Frontend recommendation experience.** `RecommendationExperience` composes the
+unchanged ranked array into `RecommendationCard` scorecards and the existing
+`RouteMap`. The planner remains the single owner of recommendation loading/error
+state and `selectedCandidateId`; card buttons and map route clicks both update that
+same value. Cards convert canonical meters and seconds only for presentation and
+render backend scores without recomputing them. Native progress indicators pair
+every available normalized score with visible numeric and semantic context, while
+null evidence remains explicitly unavailable or history-limited. Expandable
+sections expose backend component evidence, measured route characteristics,
+deduplicated provider attribution, and structured local-model or deterministic
+reasoning. No browser code calls an LLM, derives new route facts, or changes rank.
+
 Round-trip candidate generation targets four distinct results in at most eight
 sequential calls. Versioned SHA-256 inputs yield durable seeds; a fixed target-factor
 sequence and point count make requests reproducible. A dependency-free local metric
