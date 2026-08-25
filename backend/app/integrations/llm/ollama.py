@@ -13,6 +13,7 @@ from app.integrations.contracts import LlmProviderStatus
 from app.integrations.llm.errors import (
     LlmConfigurationError,
     LlmMalformedResponseError,
+    LlmModelUnavailableError,
     LlmTimeoutError,
     LlmUnavailableError,
 )
@@ -57,9 +58,12 @@ class OllamaLlmProvider:
             raise LlmMalformedResponseError(
                 "Ollama returned an invalid model-list response"
             ) from exc
-        names = {item.name for item in tags.models}
+        configured_model = _canonical_model_name(self._model)
+        names = {_canonical_model_name(item.name) for item in tags.models}
         return self._status(
-            configured=True, reachable=True, model_available=self._model in names
+            configured=True,
+            reachable=True,
+            model_available=configured_model in names,
         )
 
     async def explain(
@@ -112,6 +116,8 @@ class OllamaLlmProvider:
             raise LlmTimeoutError("Ollama request timed out") from exc
         except httpx.RequestError as exc:
             raise LlmUnavailableError("Ollama is unreachable") from exc
+        if path == "/api/chat" and response.status_code == 404:
+            raise LlmModelUnavailableError("The configured Ollama model is unavailable")
         if response.is_error:
             category = "client" if response.status_code < 500 else "server"
             raise LlmUnavailableError(f"Ollama returned a {category} error")
@@ -131,3 +137,11 @@ class OllamaLlmProvider:
             provider="ollama",
             model=self._model,
         )
+
+
+def _canonical_model_name(model: str) -> str:
+    """Match Ollama's implicit `latest` tag without altering registry ports."""
+    basename = model.rsplit("/", maxsplit=1)[-1]
+    if ":" not in basename and "@" not in basename:
+        return f"{model}:latest"
+    return model

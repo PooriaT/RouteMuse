@@ -7,6 +7,7 @@ from app.core.config import Settings
 from app.integrations.llm.errors import (
     LlmConfigurationError,
     LlmMalformedResponseError,
+    LlmModelUnavailableError,
     LlmTimeoutError,
     LlmUnavailableError,
 )
@@ -56,6 +57,31 @@ async def test_status_checks_tags_and_model_availability(models, available) -> N
         status = await OllamaLlmProvider(configured(), http).status()
     assert status.reachable is True
     assert status.model_available is available
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("configured_model", "reported_model"),
+    [
+        ("llama3.2", "llama3.2:latest"),
+        ("registry.example:5000/team/model", "registry.example:5000/team/model:latest"),
+    ],
+)
+async def test_status_matches_implicit_latest_tag(
+    configured_model: str, reported_model: str
+) -> None:
+    settings = Settings(
+        ollama_base_url="http://localhost:11434",
+        ollama_model=configured_model,
+        _env_file=None,
+    )
+    async with client(
+        lambda request: httpx.Response(
+            200, json={"models": [{"name": reported_model}]}
+        )
+    ) as http:
+        status = await OllamaLlmProvider(settings, http).status()
+    assert status.model_available is True
 
 
 @pytest.mark.anyio
@@ -114,12 +140,24 @@ async def test_chat_request_and_response() -> None:
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("status_code", [400, 404, 500, 503])
+@pytest.mark.parametrize("status_code", [400, 500, 503])
 async def test_chat_maps_http_errors_without_response_body(status_code: int) -> None:
     async with client(
         lambda request: httpx.Response(status_code, text="sensitive provider body")
     ) as http:
         with pytest.raises(LlmUnavailableError) as caught:
+            await OllamaLlmProvider(configured(), http).explain(
+                _Grounded(), _Grounded()
+            )  # type: ignore[arg-type]
+    assert "sensitive" not in str(caught.value)
+
+
+@pytest.mark.anyio
+async def test_chat_maps_not_found_to_model_unavailable_without_response_body() -> None:
+    async with client(
+        lambda request: httpx.Response(404, text="sensitive provider body")
+    ) as http:
+        with pytest.raises(LlmModelUnavailableError) as caught:
             await OllamaLlmProvider(configured(), http).explain(
                 _Grounded(), _Grounded()
             )  # type: ignore[arg-type]
