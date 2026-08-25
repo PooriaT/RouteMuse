@@ -29,12 +29,17 @@ def geometry_cells(
     reference_longitude: float,
 ) -> set[tuple[int, int]]:
     longitude_scale = 111_320.0 * cos(radians(reference_latitude))
+    longitude_deltas = continuous_longitude_deltas(
+        [point[0] for point in geometry.coordinates], reference_longitude
+    )
     projected = [
         (
-            wrapped_longitude_delta(point[0], reference_longitude) * longitude_scale,
+            longitude_delta * longitude_scale,
             (point[1] - reference_latitude) * 110_540.0,
         )
-        for point in geometry.coordinates
+        for point, longitude_delta in zip(
+            geometry.coordinates, longitude_deltas, strict=True
+        )
     ]
     cells: set[tuple[int, int]] = set()
     for x, y in resample(projected):
@@ -48,6 +53,28 @@ def geometry_cells(
 
 def wrapped_longitude_delta(longitude: float, reference: float) -> float:
     return (longitude - reference + 180.0) % 360.0 - 180.0
+
+
+def continuous_longitude_deltas(
+    longitudes: list[float], reference: float
+) -> list[float]:
+    """Unwrap one line continuously on a branch chosen independently of direction."""
+    longitude_radians = [radians(longitude) for longitude in longitudes]
+    route_origin = degrees(
+        atan2(
+            sum(sin(value) for value in longitude_radians),
+            sum(cos(value) for value in longitude_radians),
+        )
+    )
+    route_origin_delta = wrapped_longitude_delta(route_origin, reference)
+    unwrapped = [
+        route_origin_delta + wrapped_longitude_delta(longitudes[0], route_origin)
+    ]
+    for previous, current in zip(longitudes, longitudes[1:], strict=False):
+        unwrapped.append(
+            unwrapped[-1] + wrapped_longitude_delta(current, previous)
+        )
+    return unwrapped
 
 
 def resample(points: list[tuple[float, float]]) -> list[tuple[float, float]]:

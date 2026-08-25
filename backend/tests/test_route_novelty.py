@@ -7,7 +7,7 @@ from app.domain.activities import ActivityKind
 from app.domain.history import HistoricalActivityGeometry, HistoricalGeometryHistory
 from app.domain.routes import GeoJsonLineString, ProviderProvenance, RouteCandidate
 from app.services.encoded_polyline import decode_summary_polyline
-from app.services.geometry_cells import shared_projection_origin
+from app.services.geometry_cells import geometry_cells, shared_projection_origin
 from app.services.route_novelty import (
     NoveltyStatus,
     assess_route_novelty,
@@ -59,6 +59,42 @@ def test_projection_origin_is_antimeridian_safe() -> None:
     geometry = GeoJsonLineString(coordinates=[(179.9, 10.0), (-179.9, 10.0)])
     _, longitude = shared_projection_origin([geometry])
     assert abs(abs(longitude) - 180) < 0.01
+
+
+def test_antimeridian_line_is_continuous_when_global_history_moves_origin() -> None:
+    crossing = GeoJsonLineString(
+        coordinates=[(179.9, 10.0), (-179.9, 10.0), (-179.8, 10.0)]
+    )
+    reversed_crossing = GeoJsonLineString(
+        coordinates=list(reversed(crossing.coordinates))
+    )
+    prime_meridian = GeoJsonLineString(coordinates=[(-0.1, 10.0), (0.1, 10.0)])
+    latitude, longitude = shared_projection_origin([crossing, prime_meridian])
+
+    crossing_cells = geometry_cells(crossing, latitude, longitude)
+    reversed_cells = geometry_cells(reversed_crossing, latitude, longitude)
+
+    # A 33 km line should not be interpreted as a 40,000 km segment, and choosing
+    # its continuous branch must not depend on traversal direction.
+    assert len(crossing_cells) < 10_000
+    assert crossing_cells == reversed_cells
+
+
+def test_global_history_does_not_break_antimeridian_novelty() -> None:
+    crossing = GeoJsonLineString(
+        coordinates=[(179.9, 10.0), (-179.9, 10.0), (-179.8, 10.0)]
+    )
+    reversed_crossing = GeoJsonLineString(
+        coordinates=list(reversed(crossing.coordinates))
+    )
+    prime_meridian = GeoJsonLineString(coordinates=[(-0.1, 10.0), (0.1, 10.0)])
+
+    assessment = assess_route_novelty(
+        crossing, history(reversed_crossing, prime_meridian)
+    )
+
+    assert assessment.novelty_score is not None
+    assert assessment.novelty_score < 0.01
 
 
 def test_identical_reversed_and_drifted_routes_are_familiar() -> None:
