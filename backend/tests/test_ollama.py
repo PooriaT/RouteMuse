@@ -126,7 +126,15 @@ async def test_chat_request_and_response() -> None:
     def chat(request: httpx.Request) -> httpx.Response:
         captured.update(json.loads(request.content))
         assert str(request.url) == "http://localhost:11434/api/chat"
-        content = json.dumps({"summary": "Grounded", "reasons": [], "warnings": []})
+        content = json.dumps(
+            {
+                "summary": "Grounded",
+                "reasons": [],
+                "cautions": [],
+                "highlights": [],
+                "qualitative_tags": [],
+            }
+        )
         return httpx.Response(200, json={"message": {"content": content}})
 
     async with client(chat) as http:
@@ -137,6 +145,14 @@ async def test_chat_request_and_response() -> None:
     assert captured["model"] == "deployed-model:latest"
     assert captured["stream"] is False
     assert captured["options"] == {"temperature": 0}
+    assert captured["format"]["additionalProperties"] is False
+    assert set(captured["format"]["required"]) == {
+        "summary",
+        "reasons",
+        "cautions",
+        "highlights",
+        "qualitative_tags",
+    }
 
 
 @pytest.mark.anyio
@@ -174,6 +190,44 @@ async def test_chat_rejects_malformed_responses(payload) -> None:
             await OllamaLlmProvider(configured(), http).explain(
                 _Grounded(), _Grounded()
             )  # type: ignore[arg-type]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "content",
+    [
+        "not JSON and must not leak",
+        '{"summary":"missing fields and must not leak"}',
+        json.dumps(
+            {
+                "summary": "Grounded",
+                "reasons": "wrong type and must not leak",
+                "cautions": [],
+                "highlights": [],
+                "qualitative_tags": [],
+            }
+        ),
+        json.dumps(
+            {
+                "summary": "Grounded",
+                "reasons": [],
+                "cautions": [],
+                "highlights": [],
+                "qualitative_tags": [],
+                "secret": "extra field and must not leak",
+            }
+        ),
+    ],
+)
+async def test_chat_schema_errors_are_controlled_and_do_not_leak(content: str) -> None:
+    async with client(
+        lambda request: httpx.Response(200, json={"message": {"content": content}})
+    ) as http:
+        with pytest.raises(LlmMalformedResponseError) as caught:
+            await OllamaLlmProvider(configured(), http).explain(
+                _Grounded(), _Grounded()
+            )  # type: ignore[arg-type]
+    assert "must not leak" not in str(caught.value)
 
 
 @pytest.mark.anyio

@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from app.core.config import Settings
 from app.domain.athlete_profile import AthleteProfile
-from app.domain.recommendations import RecommendationExplanation
+from app.domain.recommendations import RecommendationReasoning
 from app.domain.routes import RouteCandidate
 from app.integrations.contracts import LlmProviderStatus
 from app.integrations.llm.errors import (
@@ -68,7 +68,7 @@ class OllamaLlmProvider:
 
     async def explain(
         self, candidate: RouteCandidate, athlete: AthleteProfile
-    ) -> RecommendationExplanation:
+    ) -> RecommendationReasoning:
         if not self._base_url or not self._model:
             raise LlmConfigurationError("Ollama is not configured")
         body: dict[str, Any] = {
@@ -77,21 +77,26 @@ class OllamaLlmProvider:
                 {
                     "role": "user",
                     "content": (
-                        "Explain this grounded route candidate for this athlete. "
-                        "Return a JSON RecommendationExplanation with summary, "
-                        "reasons, and warnings. Do not invent route facts.\n"
+                        "Return only JSON satisfying the requested schema. Explain "
+                        "why this route appears at its already-determined rank; do "
+                        "not rerank it or introduce a hidden score. Do not change "
+                        "supplied numbers or generate coordinates or geometry. Use "
+                        "only supplied facts, including cautions and highlights; do "
+                        "not invent conditions, safety claims, or other unsupported "
+                        "facts. Treat unknowns as unknown.\n"
                         f"candidate={candidate.model_dump_json()}\n"
                         f"athlete={athlete.model_dump_json()}"
                     ),
                 }
             ],
             "stream": False,
+            "format": RecommendationReasoning.model_json_schema(),
             "options": {"temperature": 0},
         }
         response = await self._request("POST", "/api/chat", json=body)
         try:
             chat = _ChatResponse.model_validate(response.json())
-            return RecommendationExplanation.model_validate_json(chat.message.content)
+            return RecommendationReasoning.model_validate_json(chat.message.content)
         except (ValueError, ValidationError) as exc:
             raise LlmMalformedResponseError(
                 "Ollama returned an invalid chat response"
