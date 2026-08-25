@@ -6,6 +6,7 @@ import { PlannerForm } from "@/features/planner/PlannerForm";
 import { ApiError, api } from "@/lib/api/client";
 import type { ActivityType } from "@/types/activity";
 import type { AthleteProfile } from "@/types/athleteProfile";
+import type { RecommendationResult } from "@/types/recommendations";
 import type {
   StravaConnectionStatus,
   StravaSynchronizationResult,
@@ -613,6 +614,52 @@ describe("PlannerForm", () => {
       timezone: expect.any(String),
     });
     expect(screen.getByText(/Map is not configured/)).toBeInTheDocument();
+  });
+
+  it("ignores a recommendation response after a material input changes", async () => {
+    let finishRequest: ((result: RecommendationResult) => void) | undefined;
+    vi.mocked(api.recommendations).mockReturnValue(
+      new Promise((resolve) => {
+        finishRequest = resolve;
+      }),
+    );
+    vi.mocked(api.searchPlanningAreas).mockResolvedValue([planningArea]);
+    renderPlanner();
+    fireEvent.change(screen.getByLabelText("Location"), {
+      target: { value: "Vancouver" },
+    });
+    fireEvent.click(
+      await screen.findByRole("button", { name: planningArea.display_name }),
+    );
+    fireEvent.change(screen.getByLabelText("Activity type"), {
+      target: { value: "hiking" },
+    });
+    fireEvent.change(screen.getByLabelText("Target distance (km), optional"), {
+      target: { value: "25" },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Generate recommendations" }),
+    );
+    await waitFor(() => expect(api.recommendations).toHaveBeenCalledTimes(1));
+
+    fireEvent.change(screen.getByLabelText("Target distance (km), optional"), {
+      target: { value: "30" },
+    });
+    finishRequest?.({
+      recommendations: [],
+      requested_recommendations: 3,
+      generated_candidates: 0,
+      ranking_version: "recommendation-v1",
+      warnings: [],
+    });
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Generate recommendations" }),
+      ).not.toHaveAttribute("aria-busy", "true"),
+    );
+    expect(screen.getByText(/No recommendations yet/)).toBeInTheDocument();
+    expect(screen.queryByText(/Map is not configured/)).not.toBeInTheDocument();
   });
 
   it("presents backend planning validation failures accessibly", async () => {

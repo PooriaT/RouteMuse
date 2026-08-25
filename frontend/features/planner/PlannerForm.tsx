@@ -74,6 +74,7 @@ export function PlannerForm({
   const [recommendationResult, setRecommendationResult] = useState<RecommendationResult | null>(null);
   const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null);
   const profileRequestSequence = useRef(0);
+  const recommendationRequestSequence = useRef(0);
   const selectedProfileRequest = useRef<AthleteProfileRequest | null>(null);
   const hasInvalidRange = Boolean(
     dates.startDate && dates.endDate && dates.startDate > dates.endDate,
@@ -210,8 +211,10 @@ export function PlannerForm({
   }, [activityTypes, profile, profileStatus]);
 
   const clearRecommendations = () => {
+    recommendationRequestSequence.current += 1;
     setRecommendationResult(null);
     setSelectedCandidateId(null);
+    setRecommendationError(null);
     setPlanningStatus("idle");
   };
 
@@ -257,6 +260,8 @@ export function PlannerForm({
       setPlanningStatus("error");
       return;
     }
+    const sequence = ++recommendationRequestSequence.current;
+    setRecommendationError(null);
     setPlanningStatus("loading");
     try {
       const result = await api.recommendations({
@@ -265,10 +270,12 @@ export function PlannerForm({
         end_date: dates.endDate,
         timezone,
       });
+      if (sequence !== recommendationRequestSequence.current) return;
       setRecommendationResult(result);
       setSelectedCandidateId(result.recommendations.find(({ rank }) => rank === 1)?.candidate.id ?? null);
       setPlanningStatus("ready");
     } catch (error) {
+      if (sequence !== recommendationRequestSequence.current) return;
       setRecommendationResult(null);
       setSelectedCandidateId(null);
       setPlanningStatus("error");
