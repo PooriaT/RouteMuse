@@ -205,6 +205,9 @@ and `timezone`. It loads saved athlete history server-side, infers a missing
 distance only from matching history, generates factual routes, and returns up to
 three ranked, meaningfully distinct candidates with every score assessment,
 confidence component, warning, geometry, and attribution visible. Ranking is the
-versioned deterministic `recommendation-v1` heuristic; no LLM is called. The
-existing `POST /api/v1/route-candidates` remains the unranked factual/debug API.
+versioned deterministic `recommendation-v1` heuristic. An LLM cannot affect
+scoring, ranking, or diversity selection, but configured Ollama may be called
+after selection to produce structured reasoning; otherwise the endpoint uses its
+deterministic reasoning fallback. The existing `POST /api/v1/route-candidates`
+remains the unranked factual/debug API.
 See [recommendation scoring](docs/recommendation-scoring.md) for formulas.
