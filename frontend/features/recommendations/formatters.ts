@@ -27,6 +27,8 @@ export const shapeLabels = { loop: "Loop", out_and_back: "Out-and-back", point_t
 
 const warningMessages: Record<string, string> = {
   fewer_candidates_than_desired: "Fewer distinct routes were available than requested.",
+  fewer_diverse_recommendations_available: "Fewer meaningfully distinct recommendations were available than requested.",
+  trail_discovery_unavailable: "Trail discovery was temporarily unavailable, so route variety may be limited.",
   partial_route_data: "Some route details are unavailable.",
   limited_surface_data: "Surface information is limited.",
   limited_technical_data: "Technical information is limited.",

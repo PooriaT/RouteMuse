@@ -18,10 +18,10 @@ function recommendation(id: string, name: string, rank: number, overrides: Parti
   const confidence = { score: 0.7, components: [evidence], scoring_version: "v1" };
   const candidate = { id, name, activity_kind: "hiking" as const, distance_meters: 12_450, estimated_duration_seconds: 5_460, elevation_gain_meters: 421, elevation_loss_meters: null, geometry: { type: "LineString" as const, coordinates: [[-123, 49] as [number, number], [-122.9, 49.1] as [number, number]] }, geojson_reference: null, route_shape: "out_and_back" as const, surface_breakdown: [{ value: "paved", distance_meters: 8_000, proportion: 0.64 }], way_type_breakdown: [{ value: "path", distance_meters: 4_450, proportion: 0.36 }], technical_breakdown: [{ characteristic: "steepness", value: "moderate", distance_meters: 2_000, proportion: 0.16 }], provenance: [{ provider: "ors", attribution: "Provider data", source_ids: [], provider_request_id: null, provider_profile: null }], data_confidence: 0.8, generation_provenance: null, warnings: ["mystery_code"], difficulty_score: null, athlete_fit_score: null, excitement_score: null, novelty_score: null, confidence_score: null, explanation: null };
   const final_score = 0.84;
-  return { rank, candidate, final_score, difficulty, athlete_fit, novelty, excitement, preference_alignment, confidence, scorecard: { final_score, ranking_version: "v1", difficulty, athlete_fit, novelty, excitement, preference_alignment, confidence }, warnings: ["fewer_candidates_than_desired"], reasoning: { source: rank === 1 ? "ollama" : "deterministic_fallback", schema_version: "v1", context_version: "v1", model: rank === 1 ? "local" : null, reasoning: { summary: `Summary for ${name}`, reasons: ["Matches your request."], cautions: ["Check conditions."], highlights: ["Measured route facts."], qualitative_tags: ["strong_athlete_fit", "unknown_tag"] } }, ...overrides };
+  return { rank, candidate, final_score, difficulty, athlete_fit, novelty, excitement, preference_alignment, confidence, scorecard: { final_score, ranking_version: "v1", difficulty, athlete_fit, novelty, excitement, preference_alignment, confidence }, warnings: ["fewer_candidates_than_desired"], reasoning: { source: rank === 1 ? "ollama" : "deterministic_fallback", schema_version: "v1", context_version: "v1", model: rank === 1 ? "local" : null, reasoning: { summary: `Summary for ${name}`, reasons: ["Matches your request."], cautions: ["Check conditions."], highlights: ["Measured route facts."], qualitative_tags: rank === 1 ? ["close_to_target", "strong_athlete_fit", "high_climbing", "mixed_surface", "technical_terrain", "novel", "familiar", "limited_evidence"] : ["unknown_tag"] } }, ...overrides };
 }
 
-const result: RecommendationResult = { recommendations: [recommendation("route-two", "Server first", 2), recommendation("route-one", "Server second", 1, { candidate: { ...recommendation("route-one", "Server second", 1).candidate, estimated_duration_seconds: null, elevation_gain_meters: null }, novelty: { ...recommendation("x", "x", 1).novelty, status: "insufficient_history", novelty_score: null } })], requested_recommendations: 2, generated_candidates: 2, ranking_version: "v1", warnings: [] };
+const result: RecommendationResult = { recommendations: [recommendation("route-two", "Server first", 2), recommendation("route-one", "Server second", 1, { candidate: { ...recommendation("route-one", "Server second", 1).candidate, estimated_duration_seconds: null, elevation_gain_meters: null }, novelty: { ...recommendation("x", "x", 1).novelty, status: "insufficient_history", novelty_score: null } })], requested_recommendations: 2, generated_candidates: 2, ranking_version: "v1", warnings: ["trail_discovery_unavailable", "fewer_diverse_recommendations_available"] };
 
 function Harness() { const [selected, setSelected] = useState(result.recommendations[0].candidate.id); return <RecommendationExperience result={result} selectedCandidateId={selected} onSelectCandidate={setSelected} />; }
 
@@ -45,7 +45,12 @@ describe("RecommendationExperience", () => {
     expect(screen.getAllByText("Matches your request.")).toHaveLength(2);
     expect(screen.getAllByText("Check conditions.")).toHaveLength(2);
     expect(screen.getAllByText("Measured route facts.")).toHaveLength(2);
-    expect(screen.getAllByText("Strong athlete fit")).toHaveLength(2);
+    for (const tag of ["Close to target", "Strong athlete fit", "High climbing", "Mixed surface", "Technical terrain", "Novel", "Familiar", "Limited evidence"]) {
+      expect(screen.getByText(tag)).toBeInTheDocument();
+    }
+    expect(screen.queryByText("unknown_tag")).not.toBeInTheDocument();
+    expect(screen.getByText("Trail discovery was temporarily unavailable, so route variety may be limited.")).toBeInTheDocument();
+    expect(screen.getByText("Fewer meaningfully distinct recommendations were available than requested.")).toBeInTheDocument();
     expect(screen.getAllByText("Fewer distinct routes were available than requested.")).toHaveLength(2);
     expect(screen.getAllByText("Additional route information is unavailable.")).toHaveLength(2);
     expect(screen.getAllByText("Provider data")).toHaveLength(2);
@@ -62,7 +67,7 @@ describe("RecommendationExperience", () => {
   });
 
   it("handles an empty result", () => {
-    render(<RecommendationExperience result={{ ...result, recommendations: [] }} selectedCandidateId={null} onSelectCandidate={vi.fn()} />);
+    render(<RecommendationExperience result={{ ...result, recommendations: [], warnings: [] }} selectedCandidateId={null} onSelectCandidate={vi.fn()} />);
     expect(screen.getByRole("status")).toHaveTextContent("No recommendations were returned for these inputs.");
   });
 });

@@ -1,5 +1,14 @@
 import type { RecommendationReasoningEnvelope } from "@/types/recommendations";
-const knownTags: Record<string, string> = { strong_athlete_fit: "Strong athlete fit", mixed_surface: "Mixed surface", novel: "Novel" };
+const knownTags: Record<string, string> = {
+  close_to_target: "Close to target",
+  strong_athlete_fit: "Strong athlete fit",
+  high_climbing: "High climbing",
+  mixed_surface: "Mixed surface",
+  technical_terrain: "Technical terrain",
+  novel: "Novel",
+  familiar: "Familiar",
+  limited_evidence: "Limited evidence",
+};
 
 export function RecommendationReasoning({ envelope }: { envelope: RecommendationReasoningEnvelope | null }) {
   if (!envelope) return <section className="reasoning"><h4>Why RouteMuse suggested this</h4><p className="text-sm text-slate-600">Limited evidence is available for an explanation.</p></section>;
