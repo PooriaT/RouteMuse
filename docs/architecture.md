@@ -79,6 +79,15 @@ must already be installed externally; RouteMuse never pulls models. Controlled
 errors distinguish configuration, timeouts, availability, and malformed responses,
 while deterministic recommendations remain independent.
 
+Recommendation explanations use RouteMuse's strict, versioned reasoning schema.
+Ollama receives the Pydantic-generated JSON Schema and its assistant content is
+validated against that same model before it crosses the adapter boundary. Invalid
+JSON or schema violations become a controlled malformed-response error; generated
+content is not included in that error. The input carries the ranked scorecard and
+warnings, while geometry is excluded; accepted prose and tags must also be exact
+members of trusted, field-specific evidence allowlists. See
+[Recommendation reasoning](recommendation-reasoning.md).
+
 ## Application logic
 
 Round-trip candidate generation targets four distinct results in at most eight
@@ -107,8 +116,9 @@ Because RouteMuse does not yet have application-user identities, selected planni
 4. Athlete analysis is deterministic application logic.
 5. Candidate feasibility and scoring are deterministic application logic.
 6. Ollama may explain already-grounded candidates through schema-validated output. It must never invent route facts or geometry.
-7. Persistence concerns remain outside RouteMuse domain models.
-8. External implementations remain replaceable through small provider contracts.
+7. Reasoning is bounded textual enrichment and cannot contain geometry, scores, or rank.
+8. Persistence concerns remain outside RouteMuse domain models.
+9. External implementations remain replaceable through small provider contracts.
 
 The application contains deterministic, provider-neutral athlete analytics for supported historical activities, including dominant activity, representative capability, and consistency/recency signals by RouteMuse activity kind. The versioned RouteMuse API and planner now expose this profile from persisted history. It contains no route scoring or LLM calls. The live Strava integration provides OAuth connection and token lifecycle behavior, a pure provider-to-domain activity normalization boundary, and synchronous historical activity synchronization with durable completed, partial, or failed run metadata.
 

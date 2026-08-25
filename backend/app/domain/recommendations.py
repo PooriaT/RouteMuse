@@ -2,13 +2,29 @@ from datetime import date
 from enum import StrEnum
 from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    field_validator,
+    model_validator,
+)
 
 from app.domain.calendar import resolve_iana_timezone
 from app.domain.planning import RoutePlanningRequest
 from app.domain.routes import RouteCandidate
 
 BoundedScore = Annotated[float, Field(ge=0, le=1, allow_inf_nan=False)]
+
+RECOMMENDATION_REASONING_SCHEMA_VERSION = "reasoning-v1"
+
+ReasoningSummary = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=600)
+]
+ReasoningItem = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=300)
+]
 
 
 class ScoreComponent(BaseModel):
@@ -107,10 +123,29 @@ class NoveltyAssessment(BaseModel):
     geometry_coverage_ratio: BoundedScore
 
 
-class RecommendationExplanation(BaseModel):
-    summary: str
-    reasons: list[str] = Field(default_factory=list)
-    warnings: list[str] = Field(default_factory=list)
+class RecommendationQualitativeTag(StrEnum):
+    """Version-one labels derivable from deterministic RouteMuse evidence."""
+
+    CLOSE_TO_TARGET = "close_to_target"
+    STRONG_ATHLETE_FIT = "strong_athlete_fit"
+    HIGH_CLIMBING = "high_climbing"
+    MIXED_SURFACE = "mixed_surface"
+    TECHNICAL_TERRAIN = "technical_terrain"
+    NOVEL = "novel"
+    FAMILIAR = "familiar"
+    LIMITED_EVIDENCE = "limited_evidence"
+
+
+class RecommendationReasoning(BaseModel):
+    """Bounded textual enrichment that cannot carry facts, scores, or geometry."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    summary: ReasoningSummary
+    reasons: list[ReasoningItem] = Field(max_length=8)
+    cautions: list[ReasoningItem] = Field(max_length=8)
+    highlights: list[ReasoningItem] = Field(max_length=8)
+    qualitative_tags: list[RecommendationQualitativeTag] = Field(max_length=8)
 
 
 class RecommendationRequest(BaseModel):
@@ -183,6 +218,19 @@ class RankedRecommendation(BaseModel):
     confidence: RecommendationConfidence
     scorecard: RecommendationScorecard
     warnings: list[str] = Field(default_factory=list)
+
+
+class RecommendationReasoningEvidence(BaseModel):
+    """Trusted ranking evidence and the exact prose the model may select."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    recommendation: RankedRecommendation
+    summaries: list[ReasoningSummary] = Field(min_length=1, max_length=8)
+    reasons: list[ReasoningItem] = Field(max_length=16)
+    cautions: list[ReasoningItem] = Field(max_length=16)
+    highlights: list[ReasoningItem] = Field(max_length=16)
+    qualitative_tags: list[RecommendationQualitativeTag] = Field(max_length=8)
 
 
 class RecommendationResult(BaseModel):

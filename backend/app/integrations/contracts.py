@@ -3,9 +3,11 @@ from datetime import date
 from typing import Protocol
 
 from app.domain.activities import Activity
-from app.domain.athlete_profile import AthleteProfile
 from app.domain.planning_areas import PlanningArea
-from app.domain.recommendations import RecommendationExplanation
+from app.domain.recommendations import (
+    RecommendationReasoning,
+    RecommendationReasoningEvidence,
+)
 from app.domain.routes import (
     RouteCandidate,
     RouteDiscoveryRequest,
@@ -43,5 +45,5 @@ class LlmProvider(Protocol):
     async def status(self) -> LlmProviderStatus: ...
 
     async def explain(
-        self, candidate: RouteCandidate, athlete: AthleteProfile
-    ) -> RecommendationExplanation: ...
+        self, evidence: RecommendationReasoningEvidence
+    ) -> RecommendationReasoning: ...
