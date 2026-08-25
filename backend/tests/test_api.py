@@ -29,5 +29,8 @@ def test_activity_types_are_stable() -> None:
 
 
 def test_application_starts_without_external_services() -> None:
-    with TestClient(create_app()) as application_client:
+    application = create_app()
+    shared_discovery = application.state.overpass_discovery_provider
+    with TestClient(application) as application_client:
         assert application_client.get("/health").status_code == 200
+        assert application.state.overpass_discovery_provider is shared_discovery

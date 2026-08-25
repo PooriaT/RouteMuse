@@ -33,12 +33,16 @@ class AthleteProfileRepository:
         *,
         start_at: datetime,
         end_at_exclusive: datetime,
+        connection_id: int | None = None,
     ) -> PersistedActivityHistory | None:
-        connection_id = self._session.scalar(
-            select(StravaConnection.id)
-            .order_by(StravaConnection.updated_at.desc(), StravaConnection.id.desc())
-            .limit(1)
-        )
+        if connection_id is None:
+            connection_id = self._session.scalar(
+                select(StravaConnection.id)
+                .order_by(
+                    StravaConnection.updated_at.desc(), StravaConnection.id.desc()
+                )
+                .limit(1)
+            )
         if connection_id is None:
             return None
 

@@ -5,10 +5,10 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.db.repositories.athlete_profile import AthleteProfileRepository
-from app.db.repositories.strava import StravaConnectionRepository
+from app.db.repositories.strava import StravaSynchronizationRepository
 from app.db.session import get_db_session
 from app.domain.recommendations import RecommendationRequest, RecommendationResult
-from app.integrations.geospatial.overpass import OverpassDiscoveryProvider
+from app.integrations.contracts import RouteDiscoveryProvider
 from app.integrations.routing.errors import (
     ProviderAuthenticationError,
     ProviderConfigurationError,
@@ -31,8 +31,13 @@ router = APIRouter(prefix="/recommendations", tags=["recommendations"])
 
 def get_repositories(
     session: Annotated[Session, Depends(get_db_session)],
-) -> tuple[AthleteProfileRepository, StravaConnectionRepository]:
-    return AthleteProfileRepository(session), StravaConnectionRepository(session)
+) -> tuple[AthleteProfileRepository, StravaSynchronizationRepository]:
+    return AthleteProfileRepository(session), StravaSynchronizationRepository(session)
+
+
+def get_discovery_provider(request: Request) -> RouteDiscoveryProvider:
+    """Reuse the application's cache and concurrency guard across requests."""
+    return request.app.state.overpass_discovery_provider
 
 
 def error(status_code: int, code: str, message: str, **metadata: int) -> HTTPException:
@@ -47,13 +52,13 @@ async def create_recommendations(
     body: RecommendationRequest,
     request: Request,
     repositories: Annotated[
-        tuple[AthleteProfileRepository, StravaConnectionRepository],
+        tuple[AthleteProfileRepository, StravaSynchronizationRepository],
         Depends(get_repositories),
     ],
+    discovery: Annotated[RouteDiscoveryProvider, Depends(get_discovery_provider)],
 ) -> RecommendationResult:
     """Rank persisted-history-personalized factual candidates without an LLM."""
     routing = OpenRouteServiceRoutingProvider(request.app.state.settings)
-    discovery = OverpassDiscoveryProvider(request.app.state.settings)
     try:
         return await build_recommendations(
             body, repositories[0], repositories[1], routing, discovery

@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 
 from app.db.repositories.athlete_profile import AthleteProfileRepository
-from app.db.repositories.strava import StravaConnectionRepository
+from app.db.repositories.strava import StravaSynchronizationRepository
 from app.domain.calendar import calendar_period_bounds
 from app.domain.history import HistoricalGeometryHistory
 from app.domain.planning import (
@@ -336,15 +336,23 @@ def rank_and_select(
 async def build_recommendations(
     request: RecommendationRequest,
     profile_repository: AthleteProfileRepository,
-    geometry_repository: StravaConnectionRepository,
+    geometry_repository: StravaSynchronizationRepository,
     routing_provider: RoutingProvider,
     discovery_provider: RouteDiscoveryProvider,
 ) -> RecommendationResult:
     bounds = calendar_period_bounds(
         request.start_date, request.end_date, request.timezone
     )
+    connection_id = geometry_repository.current_connection_id()
+    if connection_id is None:
+        raise RecommendationError(
+            "strava_connection_required",
+            "Connect Strava before requesting recommendations.",
+        )
     persisted = profile_repository.load_current_history(
-        start_at=bounds.start_at, end_at_exclusive=bounds.end_at_exclusive
+        start_at=bounds.start_at,
+        end_at_exclusive=bounds.end_at_exclusive,
+        connection_id=connection_id,
     )
     if persisted is None:
         raise RecommendationError(
@@ -373,7 +381,9 @@ async def build_recommendations(
     )
     generated = await generate_route_candidates(resolved, routing_provider)
     history = geometry_repository.load_historical_geometries(
-        started_at=bounds.start_at, ended_at_exclusive=bounds.end_at_exclusive
+        started_at=bounds.start_at,
+        ended_at_exclusive=bounds.end_at_exclusive,
+        connection_id=connection_id,
     )
     warnings = list(generated.warnings)
     try:
