@@ -15,8 +15,11 @@ flowchart TD
   TD -->|TrailFeature facts| RC
   RP -->|routed facts| RC
   RC --> D[Deterministic scoring]
-  D --> O[Ollama explanation]
-  O --> U[Frontend recommendations]
+  D --> DS[Diversity selection]
+  DS --> O[Ollama structured reasoning]
+  DS --> F[Deterministic reasoning fallback]
+  O --> U[Recommendation response]
+  F --> U
 ```
 
 ## RouteMuse domain
@@ -77,7 +80,7 @@ Server-side URL, model, and bounded timeout configuration is validated without
 contacting Ollama during startup or health checks. Ollama and the configured model
 must already be installed externally; RouteMuse never pulls models. Controlled
 errors distinguish configuration, timeouts, availability, and malformed responses,
-while deterministic recommendations remain independent.
+while deterministic recommendations remain independent. Reasoning runs sequentially only after ranking and diversity selection. Missing configuration skips networking; the first controlled LLM failure disables later attempts in that request and all affected routes receive deterministic reasoning from the same bounded context. Neither reasoning path can mutate ranking data.
 
 Recommendation explanations use RouteMuse's strict, versioned reasoning schema.
 Ollama receives the Pydantic-generated JSON Schema and its assistant content is

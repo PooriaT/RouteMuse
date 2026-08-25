@@ -25,7 +25,11 @@ from app.domain.recommendations import (
     ScoreComponent,
 )
 from app.domain.routes import RouteCandidate, RouteDiscoveryRequest
-from app.integrations.contracts import RouteDiscoveryProvider, RoutingProvider
+from app.integrations.contracts import (
+    LlmProvider,
+    RouteDiscoveryProvider,
+    RoutingProvider,
+)
 from app.integrations.routing.errors import (
     RouteProviderTemporaryError,
     RouteProviderTimeoutError,
@@ -36,6 +40,7 @@ from app.services.athlete_fit import (
     resolve_profile_target_distance,
 )
 from app.services.athlete_profile import calculate_activity_summaries
+from app.services.recommendation_reasoning import enrich_recommendations
 from app.services.route_candidates import (
     generate_route_candidates,
     geometries_are_similar,
@@ -339,6 +344,9 @@ async def build_recommendations(
     geometry_repository: StravaSynchronizationRepository,
     routing_provider: RoutingProvider,
     discovery_provider: RouteDiscoveryProvider,
+    llm_provider: LlmProvider | None = None,
+    *,
+    llm_model: str | None = None,
 ) -> RecommendationResult:
     bounds = calendar_period_bounds(
         request.start_date, request.end_date, request.timezone
@@ -415,6 +423,14 @@ async def build_recommendations(
     recommendations = rank_and_select(scored)
     if len(recommendations) < min(RECOMMENDATION_COUNT, len(scored)):
         warnings.append("fewer_diverse_recommendations_available")
+    recommendations, reasoning_warnings = await enrich_recommendations(
+        recommendations,
+        resolved,
+        profile,
+        llm_provider,
+        model=llm_model,
+    )
+    warnings.extend(reasoning_warnings)
     return RecommendationResult(
         recommendations=recommendations,
         requested_recommendations=RECOMMENDATION_COUNT,

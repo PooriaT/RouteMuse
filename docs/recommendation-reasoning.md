@@ -71,3 +71,14 @@ against deterministic grounding: every returned statement must exactly match a
 projected component evidence summary or warning, and every qualitative tag must be
 supported by the corresponding score, availability, or route fact. Unsupported
 safety prose and tags such as `high_climbing` with unknown elevation are rejected.
+
+
+## Recommendation integration and fallback
+
+Reasoning runs after factual generation, deterministic scoring and ranking, and diversity selection. Every selected `RankedRecommendation` receives an envelope with `source`, the strict `reasoning-v1` value, `schema_version`, `context_version`, and an optional model name. Sources are `ollama` and `deterministic_fallback`; connection URLs are never exposed.
+
+Unconfigured Ollama skips networking. Controlled timeout, connectivity, model, HTTP, malformed-response, and schema-validation failures add one safe result warning and use fallback. Calls are sequential and bounded by the selected count. Any failure, including invalid structured output, disables Ollama for the remainder of that request to avoid repeated expensive failures.
+
+The pure fallback formats known rank, activity, distance, elevation, and athlete fit; selects bounded reasons in athlete-fit, preference, challenge, novelty, excitement, and confidence order; carries known warnings into cautions; and highlights only known route facts. Qualitative tags use centralized explicit thresholds. It performs no I/O and reads no clock or random state.
+
+Reasoning never feeds back into scores, ranks, assessments, or diversity. Optional reasoning degradation therefore cannot change successful API status. Routing, history, generation, scoring, and database errors keep their existing behavior.

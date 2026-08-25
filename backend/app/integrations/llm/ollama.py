@@ -18,6 +18,7 @@ from app.integrations.llm.errors import (
     LlmTimeoutError,
     LlmUnavailableError,
 )
+from app.services.recommendation_reasoning import grounded_qualitative_tags
 
 
 class _Tag(BaseModel):
@@ -172,57 +173,10 @@ def _validate_grounded_reasoning(
         *reasoning.cautions,
         *reasoning.highlights,
     }
-    approved_tags = _grounded_tags(context)
+    approved_tags = set(grounded_qualitative_tags(context))
     if not returned_statements.issubset(approved_statements) or not set(
         reasoning.qualitative_tags
     ).issubset(approved_tags):
         raise LlmMalformedResponseError(
             "Ollama returned reasoning unsupported by supplied evidence"
         )
-
-
-def _grounded_tags(
-    context: RecommendationReasoningContext,
-) -> set[str]:
-    """Derive the qualitative vocabulary supported by deterministic context facts."""
-    tags: set[str] = set()
-    components = {item.component: item for item in context.scorecard.components}
-
-    distance = components.get("preference_alignment.target_distance")
-    if distance and distance.score is not None and distance.score >= 0.8:
-        tags.add("close_to_target")
-    if (
-        context.scorecard.athlete_fit is not None
-        and context.scorecard.athlete_fit >= 0.75
-    ):
-        tags.add("strong_athlete_fit")
-    climbing = components.get("difficulty.climbing")
-    if (
-        context.route_facts.elevation_gain_meters is not None
-        and climbing
-        and climbing.score is not None
-        and climbing.score >= 0.65
-    ):
-        tags.add("high_climbing")
-    known_surfaces = [
-        item
-        for item in context.route_facts.surfaces
-        if (item.proportion or 0) > 0 or (item.distance_meters or 0) > 0
-    ]
-    if len(known_surfaces) >= 2:
-        tags.add("mixed_surface")
-    if context.route_facts.technical_characteristics:
-        tags.add("technical_terrain")
-    novelty = context.scorecard.novelty.score
-    if novelty is not None and novelty >= 0.65:
-        tags.add("novel")
-    if novelty is not None and novelty <= 0.35:
-        tags.add("familiar")
-    if (
-        context.evidence_limitations.warnings
-        or context.evidence_limitations.collections_truncated
-        or context.evidence_limitations.strings_truncated
-        or any(not item.evidence_available for item in context.scorecard.components)
-    ):
-        tags.add("limited_evidence")
-    return tags
