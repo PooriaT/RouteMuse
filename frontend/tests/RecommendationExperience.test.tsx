@@ -70,4 +70,71 @@ describe("RecommendationExperience", () => {
     render(<RecommendationExperience result={{ ...result, recommendations: [], warnings: [] }} selectedCandidateId={null} onSelectCandidate={vi.fn()} />);
     expect(screen.getByRole("status")).toHaveTextContent("No recommendations were returned for these inputs.");
   });
+
+  it("shows comparison only for two or three selections, supports deselection, and enforces the maximum", () => {
+    const fourRoutes = { ...result, recommendations: [
+      recommendation("one", "One", 1), recommendation("two", "Two", 2),
+      recommendation("three", "Three", 3), recommendation("four", "Four", 4),
+    ] };
+    render(<RecommendationExperience result={fourRoutes} selectedCandidateId="one" onSelectCandidate={vi.fn()} />);
+    const compare = screen.getAllByRole("button", { name: /^Compare / });
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+    expect(screen.getByText("Select at least two routes to compare.")).toBeInTheDocument();
+    fireEvent.click(compare[0]);
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+    fireEvent.click(compare[1]);
+    expect(screen.getByRole("table")).toBeInTheDocument();
+    fireEvent.click(compare[2]);
+    expect(screen.getAllByRole("columnheader")).toHaveLength(4);
+    fireEvent.click(compare[3]);
+    expect(screen.getByText("You can compare up to 3 routes at once.")).toBeInTheDocument();
+    expect(screen.getAllByRole("columnheader")).toHaveLength(4);
+    fireEvent.click(screen.getByRole("button", { name: "Remove One from comparison" }));
+    expect(screen.getAllByRole("columnheader")).toHaveLength(3);
+  });
+
+  it("renders semantic headers, effort, scores, characteristics, warnings, provider data, and explicit missing evidence", () => {
+    render(<RecommendationExperience result={result} selectedCandidateId="route-two" onSelectCandidate={vi.fn()} />);
+    const compare = screen.getAllByRole("button", { name: /^Compare / });
+    fireEvent.click(compare[0]); fireEvent.click(compare[1]);
+    expect(screen.getAllByRole("columnheader")).toHaveLength(3);
+    for (const label of ["Distance", "Estimated duration", "Elevation gain", "Climbing density", "Route shape", "Key surfaces", "Way types", "Technical characteristics", "Final recommendation score", "Route difficulty", "Athlete fit", "Geographic novelty", "Excitement", "Confidence", "Preference alignment", "Warnings", "Provider metadata", "Why suggested"]) {
+      expect(screen.getByRole("rowheader", { name: label })).toBeInTheDocument();
+    }
+    const table = screen.getByRole("table");
+    expect(within(table).getAllByText("12.5 km")).toHaveLength(2);
+    expect(within(table).getByText("1 h 31 min")).toBeInTheDocument();
+    expect(within(table).getByText("421 m gained")).toBeInTheDocument();
+    expect(within(table).getByText("34 m/km")).toBeInTheDocument();
+    expect(within(table).getAllByText(/Paved · 64%/)).toHaveLength(2);
+    expect(within(table).getAllByText(/Path · 36%/)).toHaveLength(2);
+    expect(within(table).getAllByText(/Steepness:/)).toHaveLength(2);
+    expect(within(table).getAllByText("84%")).toHaveLength(2);
+    for (const score of ["90%", "82%", "60%", "75%", "70%", "88%"]) expect(within(table).getAllByText(score).length).toBeGreaterThan(0);
+    expect(within(table).getAllByText(/higher is not automatically better/i)).toHaveLength(2);
+    expect(within(table).getAllByText(/not automatically preferable/i)).toHaveLength(2);
+    expect(within(table).getAllByText(/Attribution: Provider data/)).toHaveLength(2);
+    expect(within(table).getAllByText("Not available").length).toBeGreaterThan(0);
+    expect(within(table).getAllByText("Additional route information is unavailable.")).toHaveLength(2);
+  });
+
+  it("focuses a compared route on the map without changing comparison membership", () => {
+    const onSelect = vi.fn();
+    render(<RecommendationExperience result={result} selectedCandidateId="route-two" onSelectCandidate={onSelect} />);
+    const compare = screen.getAllByRole("button", { name: /^Compare / });
+    fireEvent.click(compare[0]); fireEvent.click(compare[1]);
+    fireEvent.click(screen.getAllByRole("button", { name: "View on map" })[1]);
+    expect(onSelect).toHaveBeenCalledWith("route-one");
+    expect(screen.getAllByRole("button", { name: /^Remove .+ from comparison$/ })).toHaveLength(2);
+  });
+
+  it("clears comparison membership when a new result arrives", () => {
+    const { rerender } = render(<RecommendationExperience result={result} selectedCandidateId="route-two" onSelectCandidate={vi.fn()} />);
+    const compare = screen.getAllByRole("button", { name: /^Compare / });
+    fireEvent.click(compare[0]); fireEvent.click(compare[1]);
+    expect(screen.getByRole("table")).toBeInTheDocument();
+    rerender(<RecommendationExperience result={{ ...result }} selectedCandidateId="route-two" onSelectCandidate={vi.fn()} />);
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /^Compare / })).toHaveLength(2);
+  });
 });
