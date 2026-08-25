@@ -40,7 +40,7 @@ export function RouteMap({ recommendations, selectedCandidateId, onSelectCandida
     void import("maplibre-gl").then(({ default: maplibregl }) => {
       if (disposed || !containerRef.current) return;
       try {
-        map = new maplibregl.Map({ container: containerRef.current, style: styleUrl, attributionControl: true });
+        map = new maplibregl.Map({ container: containerRef.current, style: styleUrl, attributionControl: {} });
         mapRef.current = map;
         map.addControl(new maplibregl.NavigationControl({ showCompass: true }), "top-right");
         map.on("load", () => {
