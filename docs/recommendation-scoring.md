@@ -129,3 +129,58 @@ never automatically novel. Available-result confidence multiplies coverage by an
 evidence-amount factor that reaches full support at ten geometry activities.
 Scoring copies only `RouteCandidate.novelty_score`; difficulty, athlete fit, and
 final `confidence_score` remain untouched.
+
+## Explainable excitement (`excitement-v1`)
+
+Excitement is a deterministic product heuristic, not an objective enjoyment
+claim and not difficulty. It combines optional geographic novelty, surface and
+way-type variety, technical/terrain variety, materially overlapping named
+content, and a deliberately small route-shape heuristic. Every component exposes
+its score, base weight, availability, and evidence summary; the assessment also
+exposes the scoring version, warnings, and weighted evidence coverage.
+
+| Component | Walking | Hiking | Road | Gravel | MTB |
+|---|---:|---:|---:|---:|---:|
+| Novelty | 25% | 24% | 25% | 24% | 22% |
+| Surface variety | 17% | 15% | 10% | 21% | 16% |
+| Way-type variety | 18% | 13% | 22% | 16% | 13% |
+| Terrain variety | 12% | 20% | 15% | 15% | 23% |
+| Named content | 20% | 20% | 20% | 16% | 18% |
+| Route shape | 8% | 8% | 8% | 8% | 8% |
+
+### Variety and named-feature matching
+
+Variety uses route proportions (or distance divided by route distance), combines
+duplicate normalized labels, excludes `unknown`-like labels (including provider
+fallbacks such as `unknown_<code>` and unrated technical code zero), and calculates
+Shannon entropy normalized against four meaningful categories. Capping the
+normalizer at four keeps the scale reviewable, while proportion-aware entropy
+ensures a microscopic category adds only a microscopic amount. A single category
+scores zero; two balanced categories score 0.5; four balanced categories score
+one. Technical variety averages independently available `steepness` and
+`trail_difficulty` diversity. It never rewards the severity of a dangerous grade.
+
+The scorer makes no Overpass request. Its optional `TrailFeature` input is matched
+to the candidate with the shared 50-metre sampling/40-metre cell geometry
+utilities. A named way or named-route relation must cover at least 2% of candidate
+cells to be material. Evidence reports unique named features, unique route
+relations, and approximate union coverage. Merely appearing in the planning box,
+or being an unnamed feature without a relation, contributes nothing. A supplied
+empty discovery result is factual zero named content; absent discovery context is
+unavailable evidence.
+
+### Missing evidence and non-goals
+
+Only available components are combined, with their configured weights
+renormalized. Partial distribution coverage and novelty confidence proportionally
+lower `evidence_coverage`. A numeric score is withheld and
+`insufficient_excitement_evidence` is emitted below the documented **0.35**
+weighted coverage threshold. Missing novelty is never treated as perfect novelty,
+and missing discovery is never treated as no named trails. Only a scored
+assessment populates a copied `RouteCandidate.excitement_score`; final
+`confidence_score` remains unset.
+
+No component infers popularity, ratings, scenery, viewpoint quality, crowds, or
+“hidden gem” status. Names and relation memberships are factual geographic
+content only. The shape component does not inspect the user's requested shape;
+preference alignment and final ranking remain separate concerns.

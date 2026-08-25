@@ -30,6 +30,30 @@ class RouteDifficultyAssessment(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+class ExcitementComponent(BaseModel):
+    """One reviewable heuristic contribution backed by candidate facts."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    name: str
+    score: BoundedScore | None
+    base_weight: BoundedScore
+    evidence_available: bool
+    evidence_summary: str
+
+
+class ExcitementAssessment(BaseModel):
+    """Versioned excitement heuristic with an explicit evidence audit."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    score: BoundedScore | None
+    components: list[ExcitementComponent]
+    evidence_coverage: BoundedScore
+    scoring_version: str
+    warnings: list[str] = Field(default_factory=list)
+
+
 class AthleteFitStatus(StrEnum):
     """Whether athlete-fit evidence permits a numeric assessment."""
 
