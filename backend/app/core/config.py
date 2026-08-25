@@ -28,6 +28,9 @@ class Settings(BaseSettings):
     openrouteservice_api_key: SecretStr | None = None
     overpass_api_url: str = "https://overpass-api.de/api/interpreter"
     overpass_user_agent: str = "RouteMuse/0.1 (OpenStreetMap discovery)"
+    ollama_base_url: str | None = None
+    ollama_model: str | None = None
+    ollama_request_timeout_seconds: float = Field(default=30.0, gt=0, le=300)
 
     @field_validator("cors_origins", mode="before")
     @classmethod
@@ -53,6 +56,46 @@ class Settings(BaseSettings):
                 "frontend_url must be an HTTP(S) URL without credentials, "
                 "query, or fragment"
             )
+        return value
+
+    @field_validator("ollama_base_url", mode="before")
+    @classmethod
+    def validate_ollama_base_url(cls, value: object) -> object:
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            return value
+        value = value.strip()
+        if not value:
+            return None
+        try:
+            parsed = urlsplit(value)
+            valid_port = parsed.port
+        except ValueError as exc:
+            raise ValueError("ollama_base_url must be a valid HTTP(S) URL") from exc
+        if (
+            parsed.scheme not in {"http", "https"}
+            or not parsed.netloc
+            or not parsed.hostname
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.query
+            or parsed.fragment
+            or valid_port is not None
+            and not 1 <= valid_port <= 65535
+        ):
+            raise ValueError(
+                "ollama_base_url must be an HTTP(S) URL without credentials, "
+                "query, or fragment"
+            )
+        return value.rstrip("/")
+
+    @field_validator("ollama_model", mode="before")
+    @classmethod
+    def normalize_ollama_model(cls, value: object) -> object:
+        if isinstance(value, str):
+            value = value.strip()
+            return value or None
         return value
 
 
