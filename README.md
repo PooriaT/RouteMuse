@@ -126,7 +126,7 @@ converted to canonical meters and seconds before `POST /api/v1/planning/validate
 Empty overrides remain null for future profile-driven inference. Validation itself does
 not generate a route; a resolved distance can be submitted to the factual candidate endpoint.
 
-`.env.example` documents optional Ollama configuration. Ollama must already be installed and running externally with the configured model; RouteMuse never launches Ollama or pulls models. Configuration is read only by FastAPI, so no `NEXT_PUBLIC_` Ollama variable is required. Startup, health checks, and deterministic recommendations work without Ollama, and Ollama output does not affect scoring or ranking.
+`.env.example` documents optional Ollama configuration. Ollama must already be installed and running externally with the configured model; RouteMuse never launches Ollama or pulls models. Configuration is read only by FastAPI, so no `NEXT_PUBLIC_` Ollama variable is required. Startup, health checks, and deterministic recommendations work without Ollama, and Ollama output does not affect scoring or ranking. After diversity selection, only selected routes receive structured reasoning. Missing or failed Ollama uses the first-class deterministic, scorecard-grounded fallback and does not turn a valid recommendation request into an error.
 
 ## OpenStreetMap discovery
 
@@ -195,7 +195,7 @@ poetry run uvicorn app.main:app --reload
 
 ## Current limitations and next integrations
 
-RouteMuse still has no user-account system, frontend recommendation map, GPX export, route saving, or Ollama explanation. The factual route-candidate endpoint remains deliberately unranked, while the separate recommendation endpoint applies deterministic personalized scoring to copied candidate data. Strava OAuth credentials are connected and encrypted server-side; historical activities can be synchronized idempotently, and exact `sport_type` values are normalized at the integration boundary while unsupported values remain identifiable.
+RouteMuse still has no user-account system, frontend recommendation map, GPX export, or route saving. Structured backend reasoning is available, but its frontend presentation remains future work. The factual route-candidate endpoint remains deliberately unranked, while the separate recommendation endpoint applies deterministic personalized scoring to copied candidate data. Strava OAuth credentials are connected and encrypted server-side; historical activities can be synchronized idempotently, and exact `sport_type` values are normalized at the integration boundary while unsupported values remain identifiable.
 
 
 ### Personalized recommendations
@@ -205,6 +205,9 @@ and `timezone`. It loads saved athlete history server-side, infers a missing
 distance only from matching history, generates factual routes, and returns up to
 three ranked, meaningfully distinct candidates with every score assessment,
 confidence component, warning, geometry, and attribution visible. Ranking is the
-versioned deterministic `recommendation-v1` heuristic; no LLM is called. The
-existing `POST /api/v1/route-candidates` remains the unranked factual/debug API.
+versioned deterministic `recommendation-v1` heuristic. An LLM cannot affect
+scoring, ranking, or diversity selection, but configured Ollama may be called
+after selection to produce structured reasoning; otherwise the endpoint uses its
+deterministic reasoning fallback. The existing `POST /api/v1/route-candidates`
+remains the unranked factual/debug API.
 See [recommendation scoring](docs/recommendation-scoring.md) for formulas.

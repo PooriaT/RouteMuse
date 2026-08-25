@@ -9,6 +9,7 @@ from app.db.repositories.strava import StravaSynchronizationRepository
 from app.db.session import get_db_session
 from app.domain.recommendations import RecommendationRequest, RecommendationResult
 from app.integrations.contracts import RouteDiscoveryProvider
+from app.integrations.llm.ollama import OllamaLlmProvider
 from app.integrations.routing.errors import (
     ProviderAuthenticationError,
     ProviderConfigurationError,
@@ -57,11 +58,23 @@ async def create_recommendations(
     ],
     discovery: Annotated[RouteDiscoveryProvider, Depends(get_discovery_provider)],
 ) -> RecommendationResult:
-    """Rank persisted-history-personalized factual candidates without an LLM."""
+    """Rank factual candidates, then add optional resilient reasoning."""
     routing = OpenRouteServiceRoutingProvider(request.app.state.settings)
+    settings = request.app.state.settings
+    llm = (
+        OllamaLlmProvider(settings)
+        if settings.ollama_base_url and settings.ollama_model
+        else None
+    )
     try:
         return await build_recommendations(
-            body, repositories[0], repositories[1], routing, discovery
+            body,
+            repositories[0],
+            repositories[1],
+            routing,
+            discovery,
+            llm,
+            llm_model=settings.ollama_model,
         )
     except RecommendationError as exc:
         conflict = {

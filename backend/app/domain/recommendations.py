@@ -148,6 +148,23 @@ class RecommendationReasoning(BaseModel):
     qualitative_tags: list[RecommendationQualitativeTag] = Field(max_length=8)
 
 
+class ReasoningSource(StrEnum):
+    OLLAMA = "ollama"
+    DETERMINISTIC_FALLBACK = "deterministic_fallback"
+
+
+class RecommendationReasoningEnvelope(BaseModel):
+    """Reasoning plus safe provenance; provider connection details are excluded."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    source: ReasoningSource
+    reasoning: RecommendationReasoning
+    schema_version: str = RECOMMENDATION_REASONING_SCHEMA_VERSION
+    context_version: str
+    model: str | None = None
+
+
 class RecommendationRequest(BaseModel):
     """Planning inputs plus the inclusive persisted-history calendar period."""
 
@@ -218,6 +235,7 @@ class RankedRecommendation(BaseModel):
     confidence: RecommendationConfidence
     scorecard: RecommendationScorecard
     warnings: list[str] = Field(default_factory=list)
+    reasoning: RecommendationReasoningEnvelope | None = None
 
 
 class RecommendationResult(BaseModel):
