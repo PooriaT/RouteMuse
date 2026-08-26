@@ -200,6 +200,7 @@ def test_generates_desired_ordered_distinct_candidates_with_provenance() -> None
         assert generation.seed == provider.requests[index].round_trip.seed
         assert generation.round_trip_points == 4
         assert generation.attempt_index == index
+        assert route.name == "Test area · 10.1 km Hiking Loop"
         assert route.provenance[0].attribution == "Test data"
         assert route.difficulty_score is None
         assert route.athlete_fit_score is None
