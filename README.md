@@ -185,8 +185,9 @@ distinct scorecards, measured surface/way/technical characteristics, warnings,
 provider attribution, and the server's local-model or deterministic-fallback
 reasoning. Card and map interactions share one candidate selection, so either
 surface updates the other without client-side reranking or score calculation.
-Configure a replaceable basemap style with
-`NEXT_PUBLIC_MAP_STYLE_URL`; when it is absent or unavailable, recommendation
+Configure a replaceable basemap style with `NEXT_PUBLIC_MAP_STYLE_URL` in
+`frontend/.env.local`; `.env.example` supplies the keyless OpenFreeMap Liberty
+style used for local development. When the style is absent or unavailable, recommendation
 generation and results remain usable while the map shows a controlled fallback.
 MapLibre keeps style/source attribution visible, while the selected route's
 deduplicated provider attribution is rendered separately below the map. RouteMuse

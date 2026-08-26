@@ -102,6 +102,8 @@ class _Warning(BaseModel):
 class _Properties(BaseModel):
     model_config = ConfigDict(extra="ignore")
     summary: _Summary
+    ascent: float | None = Field(default=None, ge=0, allow_inf_nan=False)
+    descent: float | None = Field(default=None, ge=0, allow_inf_nan=False)
     extras: dict[str, _Extra] = Field(default_factory=dict)
     warnings: list[_Warning] = Field(default_factory=list)
 
@@ -178,14 +180,17 @@ class OpenRouteServiceRoutingProvider:
             if owns_client:
                 await client.aclose()
 
+        error_code = _ors_error_code(response)
         if response.status_code in {401, 403}:
             raise ProviderAuthenticationError
         if response.status_code == 429:
             raise RouteProviderRateLimitError(_retry_after(response))
+        if error_code in {2009, 2010, 2014, 2015, 2016}:
+            raise NoRouteFoundError
+        if error_code in {2004, 2013, 2017}:
+            raise ProviderLimitError
         if response.status_code >= 500:
             raise RouteProviderTemporaryError
-        if response.status_code == 400 and _ors_error_code(response) == 2013:
-            raise ProviderLimitError
         if response.status_code in {404, 422}:
             raise NoRouteFoundError
         if response.is_error:
@@ -202,11 +207,12 @@ class OpenRouteServiceRoutingProvider:
         payload: _FeatureCollection, request: RoutingRequest, profile: str
     ) -> RouteCandidate:
         feature = payload.features[0]
-        summary = feature.properties.summary
+        properties = feature.properties
+        summary = properties.summary
         geometry = GeoJsonLineString(
             type=feature.geometry.type, coordinates=feature.geometry.coordinates
         )
-        extras = feature.properties.extras
+        extras = properties.extras
         generation = None
         shape = RouteShape.POINT_TO_POINT
         if request.round_trip is not None:
@@ -225,8 +231,8 @@ class OpenRouteServiceRoutingProvider:
             activity_kind=request.activity_kind,
             distance_meters=summary.distance,
             estimated_duration_seconds=round(summary.duration),
-            elevation_gain_meters=summary.ascent,
-            elevation_loss_meters=summary.descent,
+            elevation_gain_meters=properties.ascent,
+            elevation_loss_meters=properties.descent,
             geometry=geometry,
             route_shape=shape,
             surface_breakdown=_categorical(
@@ -256,7 +262,7 @@ class OpenRouteServiceRoutingProvider:
                 provider_profile=profile,
             )],
             generation_provenance=generation,
-            warnings=[warning.message for warning in feature.properties.warnings],
+            warnings=[warning.message for warning in properties.warnings],
         )
 
 

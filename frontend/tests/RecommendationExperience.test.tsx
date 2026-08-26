@@ -130,6 +130,16 @@ describe("RecommendationExperience", () => {
     expect(screen.getAllByRole("button", { name: /^Remove .+ from comparison$/ })).toHaveLength(2);
   });
 
+  it("does not repeat a reasoning caution as a route notice", () => {
+    const route = recommendation("one", "One", 1);
+    route.warnings = ["partial_surface_evidence"];
+    route.candidate = { ...route.candidate, warnings: [] };
+    route.reasoning!.reasoning.cautions = ["partial_surface_evidence"];
+    render(<RecommendationExperience result={{ ...result, recommendations: [route], warnings: [] }} selectedCandidateId="one" onSelectCandidate={vi.fn()} />);
+    expect(screen.queryByText("Route notices")).not.toBeInTheDocument();
+    expect(screen.getByText("Known surface information covers only part of this route.")).toBeInTheDocument();
+  });
+
   it("clears comparison membership when a new result arrives", () => {
     const { rerender } = render(<RecommendationExperience result={result} selectedCandidateId="route-two" onSelectCandidate={vi.fn()} />);
     const compare = screen.getAllByRole("button", { name: /^Compare / });

@@ -11,7 +11,8 @@ import { warningMessage } from "./formatters";
 
 export function RecommendationCard({ recommendation, selected, compared, onSelect, onToggleCompare }: { recommendation: RankedRecommendation; selected: boolean; compared: boolean; onSelect: () => void; onToggleCompare: () => void }) {
   const [exportError, setExportError] = useState<string | null>(null);
-  const warnings = [...new Set([...recommendation.warnings, ...recommendation.candidate.warnings])];
+  const cautions = new Set(recommendation.reasoning?.reasoning.cautions ?? []);
+  const warnings = [...new Set([...recommendation.warnings, ...recommendation.candidate.warnings])].filter((warning) => !cautions.has(warning));
   const attributions = [...new Set(recommendation.candidate.provenance.map(({ attribution }) => attribution).filter(Boolean))];
   const exportRoute = () => {
     try {

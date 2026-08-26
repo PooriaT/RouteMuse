@@ -14,7 +14,10 @@ from app.domain.routes import (
     RoutingRequest,
 )
 from app.integrations.contracts import RoutingProvider
-from app.integrations.routing.errors import NoRouteFoundError
+from app.integrations.routing.errors import (
+    NoRouteFoundError,
+    RouteProviderTemporaryError,
+)
 from app.services.geometry_cells import geometry_cells, shared_projection_origin
 
 GENERATION_ALGORITHM_VERSION = "routemuse-round-trip-v1"
@@ -71,6 +74,19 @@ def effective_target_distances(
     ]
 
 
+def _candidate_name(
+    request: RoutePlanningRequest, candidate: RouteCandidate
+) -> str:
+    area = request.planning_area.display_name.partition(",")[0].strip()
+    activity = request.activity_kind.value.replace("_", " ").title()
+    shape = (
+        candidate.route_shape.value.replace("_", " ").title()
+        if candidate.route_shape is not None
+        else "Route"
+    )
+    return f"{area} · {candidate.distance_meters / 1_000:.1f} km {activity} {shape}"
+
+
 async def generate_route_candidates(
     request: RoutePlanningRequest, provider: RoutingProvider
 ) -> CandidateGenerationResult:
@@ -91,6 +107,7 @@ async def generate_route_candidates(
     candidates: list[RouteCandidate] = []
     attempts_made = 0
     limit_skips = 0
+    temporary_failures = 0
     for attempt_index, (seed, target) in enumerate(zip(seeds, targets, strict=True)):
         if len(candidates) == DESIRED_CANDIDATES:
             break
@@ -111,6 +128,9 @@ async def generate_route_candidates(
             candidate = await provider.route(routing_request)
         except NoRouteFoundError:
             continue
+        except RouteProviderTemporaryError:
+            temporary_failures += 1
+            continue
 
         generation = CandidateGenerationProvenance(
             algorithm_version=GENERATION_ALGORITHM_VERSION,
@@ -127,6 +147,7 @@ async def generate_route_candidates(
                     NAMESPACE_URL,
                     f"{GENERATION_ALGORITHM_VERSION}:{seed}:{attempt_index}",
                 ),
+                "name": _candidate_name(request, candidate),
                 "generation_provenance": generation,
                 "difficulty_score": None,
                 "athlete_fit_score": None,
@@ -143,6 +164,8 @@ async def generate_route_candidates(
             candidates.append(candidate)
 
     if not candidates:
+        if attempts_made and temporary_failures == attempts_made:
+            raise RouteProviderTemporaryError
         code = (
             "route_target_exceeds_provider_limit"
             if limit_skips == MAX_ATTEMPTS

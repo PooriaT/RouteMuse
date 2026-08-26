@@ -7,6 +7,7 @@ from app.domain.recommendations import RouteDifficultyAssessment, ScoreComponent
 from app.domain.routes import DistanceBreakdown, RouteCandidate
 
 DIFFICULTY_SCORING_VERSION = "difficulty-v1"
+MATERIAL_DISTRIBUTION_COVERAGE = 0.95
 
 
 class UnsupportedDifficultyScoringError(ValueError):
@@ -331,7 +332,10 @@ def assess_route_difficulty(candidate: RouteCandidate) -> RouteDifficultyAssessm
     warnings.extend(
         f"partial_{name}_evidence"
         for name, component_coverage in distribution_coverages.items()
-        if values[name][0] is not None and component_coverage < 1
+        if (
+            values[name][0] is not None
+            and component_coverage < MATERIAL_DISTRIBUTION_COVERAGE
+        )
     )
     return RouteDifficultyAssessment(
         score=score,

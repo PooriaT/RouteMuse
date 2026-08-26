@@ -46,7 +46,7 @@ def client(handler) -> httpx.AsyncClient:
 
 def configured() -> Settings:
     return Settings(
-        ollama_base_url="http://localhost:11434/",
+        ollama_base_url="http://localhost:11434/api/",
         ollama_model="deployed-model:latest",
         _env_file=None,
     )

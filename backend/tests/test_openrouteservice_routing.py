@@ -35,8 +35,27 @@ def route_request(kind: ActivityKind = ActivityKind.WALKING) -> RoutingRequest:
 
 def response_payload(*, elevation: bool = True) -> dict[str, Any]:
     summary: dict[str, Any] = {"distance": 4321.5, "duration": 987.6}
+    properties: dict[str, Any] = {
+        "summary": summary,
+        "warnings": [{"code": 1, "message": "Private access may apply"}],
+        "extras": {
+            "surface": {"summary": [
+                {"value": 3, "distance": 3000, "amount": 69.42},
+                {"value": 10, "distance": 1321.5, "amount": 30.58},
+            ]},
+            "waytype": {"summary": [
+                {"value": 4, "distance": 4321.5, "amount": 100}
+            ]},
+            "steepness": {"summary": [
+                {"value": 2, "distance": 2000, "amount": 46.28}
+            ]},
+            "traildifficulty": {"summary": [
+                {"value": 2, "distance": 4321.5, "amount": 100}
+            ]},
+        },
+    }
     if elevation:
-        summary.update(ascent=321.2, descent=123.4)
+        properties.update(ascent=321.2, descent=123.4)
     return {
         "type": "FeatureCollection",
         "metadata": {
@@ -49,25 +68,7 @@ def response_payload(*, elevation: bool = True) -> dict[str, Any]:
                 "type": "LineString",
                 "coordinates": [[-123.1, 49.2, 5], [-123.2, 49.3, 20]],
             },
-            "properties": {
-                "summary": summary,
-                "warnings": [{"code": 1, "message": "Private access may apply"}],
-                "extras": {
-                    "surface": {"summary": [
-                        {"value": 3, "distance": 3000, "amount": 69.42},
-                        {"value": 10, "distance": 1321.5, "amount": 30.58},
-                    ]},
-                    "waytype": {"summary": [
-                        {"value": 4, "distance": 4321.5, "amount": 100}
-                    ]},
-                    "steepness": {"summary": [
-                        {"value": 2, "distance": 2000, "amount": 46.28}
-                    ]},
-                    "traildifficulty": {"summary": [
-                        {"value": 2, "distance": 4321.5, "amount": 100}
-                    ]},
-                },
-            },
+            "properties": properties,
         }],
     }
 
@@ -323,13 +324,14 @@ def test_rate_limit_and_timeout() -> None:
         asyncio.run(invoke(timeout))
 
 
-def test_provider_limit_is_explicit_and_not_clamped() -> None:
+@pytest.mark.parametrize("error_code", [2004, 2013, 2017])
+def test_provider_limit_is_explicit_and_not_clamped(error_code: int) -> None:
     seen: list[dict[str, Any]] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
         seen.append(json.loads(request.content))
         return httpx.Response(400, json={
-            "error": {"code": 2013, "message": "request exceeds limit"}
+            "error": {"code": error_code, "message": "request exceeds limit"}
         })
 
     request = RoutingRequest(
@@ -344,10 +346,20 @@ def test_provider_limit_is_explicit_and_not_clamped() -> None:
     assert seen[0]["options"]["round_trip"]["length"] == 999999.0
 
 
+@pytest.mark.parametrize("error_code", [2009, 2010, 2014, 2015, 2016])
+def test_no_route_error_code_takes_precedence_over_http_status(
+    error_code: int,
+) -> None:
+    with pytest.raises(NoRouteFoundError):
+        asyncio.run(invoke(lambda _: httpx.Response(500, json={
+            "error": {"code": error_code, "message": "sensitive"}
+        })))
+
+
 def test_missing_parameter_error_is_not_mislabeled_as_provider_limit() -> None:
     with pytest.raises(ProviderInvalidRequestError):
         asyncio.run(invoke(lambda _: httpx.Response(400, json={
-            "error": {"code": 2004, "message": "missing parameter"}
+            "error": {"code": 2001, "message": "missing parameter"}
         })))
 
 

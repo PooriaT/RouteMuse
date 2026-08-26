@@ -69,6 +69,10 @@ def test_strava_oauth_settings_are_optional_and_client_secret_is_protected(
     ("url", "expected"),
     [
         ("http://localhost:11434/", "http://localhost:11434"),
+        ("http://localhost:11434/api", "http://localhost:11434"),
+        ("http://api", "http://api"),
+        ("http://api/api", "http://api"),
+        ("http://ollama.internal:11434/base/api/", "http://ollama.internal:11434/base"),
         ("http://ollama.internal:11434/base///", "http://ollama.internal:11434/base"),
         ("https://models.example.com", "https://models.example.com"),
     ],

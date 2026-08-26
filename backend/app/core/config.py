@@ -88,7 +88,10 @@ class Settings(BaseSettings):
                 "ollama_base_url must be an HTTP(S) URL without credentials, "
                 "query, or fragment"
             )
-        return value.rstrip("/")
+        path = parsed.path.rstrip("/")
+        if path.endswith("/api"):
+            path = path[:-4]
+        return parsed._replace(path=path).geturl()
 
     @field_validator("ollama_model", mode="before")
     @classmethod
