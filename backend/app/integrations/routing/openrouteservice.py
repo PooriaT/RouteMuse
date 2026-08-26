@@ -185,9 +185,9 @@ class OpenRouteServiceRoutingProvider:
             raise ProviderAuthenticationError
         if response.status_code == 429:
             raise RouteProviderRateLimitError(_retry_after(response))
-        if error_code in {2009, 2010, 2013, 2014, 2015, 2016}:
+        if error_code in {2009, 2010, 2014, 2015, 2016}:
             raise NoRouteFoundError
-        if error_code in {2004, 2017}:
+        if error_code in {2004, 2013, 2017}:
             raise ProviderLimitError
         if response.status_code >= 500:
             raise RouteProviderTemporaryError

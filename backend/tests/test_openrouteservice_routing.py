@@ -324,13 +324,14 @@ def test_rate_limit_and_timeout() -> None:
         asyncio.run(invoke(timeout))
 
 
-def test_provider_limit_is_explicit_and_not_clamped() -> None:
+@pytest.mark.parametrize("error_code", [2004, 2013, 2017])
+def test_provider_limit_is_explicit_and_not_clamped(error_code: int) -> None:
     seen: list[dict[str, Any]] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
         seen.append(json.loads(request.content))
         return httpx.Response(400, json={
-            "error": {"code": 2004, "message": "request exceeds limit"}
+            "error": {"code": error_code, "message": "request exceeds limit"}
         })
 
     request = RoutingRequest(
@@ -345,7 +346,7 @@ def test_provider_limit_is_explicit_and_not_clamped() -> None:
     assert seen[0]["options"]["round_trip"]["length"] == 999999.0
 
 
-@pytest.mark.parametrize("error_code", [2009, 2010, 2013, 2014, 2015, 2016])
+@pytest.mark.parametrize("error_code", [2009, 2010, 2014, 2015, 2016])
 def test_no_route_error_code_takes_precedence_over_http_status(
     error_code: int,
 ) -> None:
