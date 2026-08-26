@@ -42,7 +42,8 @@ configured weight, evidence availability, and a factual evidence summary. Overal
 difficulty renormalizes the weights of only available components. The separate
 `evidence_coverage` reports how much configured weighted evidence was known;
 unknown surface labels reduce coverage and are not treated as difficult. Warnings
-identify missing or partial evidence. Thus a distance-only route can receive a
+identify missing evidence or materially partial distributions below 95% coverage;
+small unknown shares still reduce exact coverage without creating a caution. Thus a distance-only route can receive a
 difficulty score without appearing as well understood as a fully described route.
 
 `RouteCandidate.difficulty_score` is populated by the RouteMuse scoring service on

@@ -174,6 +174,24 @@ def test_partial_technical_distributions_have_specific_warnings() -> None:
     assert "partial_trail_difficulty_evidence" in assessment.warnings
 
 
+def test_small_unknown_distribution_share_reduces_coverage_without_warning() -> None:
+    assessment = assess_route_difficulty(route(
+        surfaces=[
+            SurfaceSummary(value="asphalt", proportion=0.99),
+            SurfaceSummary(value="unknown", proportion=0.01),
+        ],
+        technical=[
+            TechnicalSummary(
+                characteristic="steepness", value="level", proportion=0.99
+            )
+        ],
+    ))
+
+    assert assessment.evidence_coverage < 1
+    assert "partial_surface_evidence" not in assessment.warnings
+    assert "partial_steepness_evidence" not in assessment.warnings
+
+
 def test_scoring_is_bounded_versioned_batch_independent_and_copying() -> None:
     candidate = route(surfaces=[SurfaceSummary(value="sand", proportion=1.0)])
     alone = assess_route_difficulty(candidate)

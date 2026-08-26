@@ -14,7 +14,10 @@ from app.domain.routes import (
     RoutingRequest,
 )
 from app.integrations.contracts import RoutingProvider
-from app.integrations.routing.errors import NoRouteFoundError
+from app.integrations.routing.errors import (
+    NoRouteFoundError,
+    RouteProviderTemporaryError,
+)
 from app.services.geometry_cells import geometry_cells, shared_projection_origin
 
 GENERATION_ALGORITHM_VERSION = "routemuse-round-trip-v1"
@@ -91,6 +94,7 @@ async def generate_route_candidates(
     candidates: list[RouteCandidate] = []
     attempts_made = 0
     limit_skips = 0
+    temporary_failures = 0
     for attempt_index, (seed, target) in enumerate(zip(seeds, targets, strict=True)):
         if len(candidates) == DESIRED_CANDIDATES:
             break
@@ -110,6 +114,9 @@ async def generate_route_candidates(
         try:
             candidate = await provider.route(routing_request)
         except NoRouteFoundError:
+            continue
+        except RouteProviderTemporaryError:
+            temporary_failures += 1
             continue
 
         generation = CandidateGenerationProvenance(
@@ -143,6 +150,8 @@ async def generate_route_candidates(
             candidates.append(candidate)
 
     if not candidates:
+        if attempts_made and temporary_failures == attempts_made:
+            raise RouteProviderTemporaryError
         code = (
             "route_target_exceeds_provider_limit"
             if limit_skips == MAX_ATTEMPTS

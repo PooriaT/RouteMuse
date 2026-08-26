@@ -33,6 +33,18 @@ const warningMessages: Record<string, string> = {
   limited_surface_data: "Surface information is limited.",
   limited_technical_data: "Technical information is limited.",
   insufficient_history: "Your activity history is insufficient for part of this assessment.",
+  missing_climbing_density_evidence: "Climbing density could not be assessed without route elevation.",
+  missing_elevation_fit_evidence: "Elevation fit could not be compared without route elevation.",
+  missing_elevation_gain_evidence: "Route elevation gain was not provided.",
+  missing_named_content_evidence: "Nearby named trail information was unavailable.",
+  missing_novelty_evidence: "Historical route geometry was insufficient to assess novelty.",
+  partial_steepness_evidence: "Steepness information covers only part of this route.",
+  partial_surface_evidence: "Known surface information covers only part of this route.",
+  ollama_unconfigured_using_fallback: "Using RouteMuse's built-in explanation because the local AI explanation is not configured.",
+  ollama_timeout_using_fallback: "Using RouteMuse's built-in explanation because the local AI explanation timed out.",
+  ollama_invalid_output_using_fallback: "Using RouteMuse's built-in explanation because the local AI response was invalid.",
+  ollama_model_unavailable_using_fallback: "Using RouteMuse's built-in explanation because the local AI model is unavailable.",
+  ollama_unavailable_using_fallback: "Using RouteMuse's built-in explanation because the local AI explanation is unavailable.",
 };
 
 export function warningMessage(warning: string) {

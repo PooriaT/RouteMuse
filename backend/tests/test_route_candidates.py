@@ -17,6 +17,7 @@ from app.integrations.routing.errors import (
     ProviderAuthenticationError,
     RouteProviderMalformedResponseError,
     RouteProviderRateLimitError,
+    RouteProviderTemporaryError,
 )
 from app.services.route_candidates import (
     DESIRED_CANDIDATES,
@@ -227,6 +228,24 @@ def test_no_route_and_duplicate_are_replaced_sequentially() -> None:
         4,
         5,
     ]
+
+
+def test_temporary_failure_uses_the_next_bounded_variant() -> None:
+    distinct = [candidate(loop(offset=index * 0.03)) for index in range(4)]
+    provider = FakeProvider([RouteProviderTemporaryError(), *distinct])
+
+    result = run(planning_request(), provider)
+
+    assert len(result.candidates) == DESIRED_CANDIDATES
+    assert result.attempts_made == 5
+
+
+def test_all_temporary_failures_remain_provider_unavailable() -> None:
+    provider = FakeProvider([RouteProviderTemporaryError() for _ in range(8)])
+
+    with pytest.raises(RouteProviderTemporaryError):
+        run(planning_request(), provider)
+    assert len(provider.requests) == MAX_ATTEMPTS
 
 
 def test_attempt_limit_returns_partial_and_zero_is_controlled() -> None:
